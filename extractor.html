@@ -738,6 +738,7 @@
     let allParagraphs = [];
     let db;
     let lastCopiedPageNum = null;
+    let currentFileName = '';
     
     const uploadBox = document.getElementById('uploadBox');
     const fileInput = document.getElementById('fileInput');
@@ -803,6 +804,40 @@
             notes[item.pageKey] = item.note;
           });
           resolve(notes);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function saveLastCopiedPage(fileName, pageNum) {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([notesStoreName], 'readwrite');
+        const objectStore = transaction.objectStore(notesStoreName);
+        const pageKey = `${fileName}_lastCopied`;
+        const request = objectStore.put({ pageKey, note: pageNum.toString() });
+        
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function loadLastCopiedPage(fileName) {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([notesStoreName], 'readonly');
+        const objectStore = transaction.objectStore(notesStoreName);
+        const pageKey = `${fileName}_lastCopied`;
+        const request = objectStore.get(pageKey);
+        
+        request.onsuccess = () => {
+          if (request.result && request.result.note) {
+            resolve(parseInt(request.result.note));
+          } else {
+            resolve(null);
+          }
         };
         request.onerror = () => reject(request.error);
       });
@@ -1047,10 +1082,20 @@
       }
     }
     
-    function displayResults(fileName, pageData) {
+    async function displayResults(fileName, pageData) {
       loading.classList.remove('show');
       results.classList.add('show');
       copyAllBtn.style.display = 'block';
+      
+      // Store current file name
+      currentFileName = fileName;
+      
+      // Load last copied page for this file
+      const savedLastCopied = await loadLastCopiedPage(fileName);
+      if (savedLastCopied !== null) {
+        lastCopiedPageNum = savedLastCopied;
+        lastCopiedBtn.classList.add('show');
+      }
       
       const totalParas = pageData.reduce((sum, p) => sum + p.paragraphs.length, 0);
       document.getElementById('fileName').textContent = fileName;
@@ -1390,7 +1435,7 @@
       }
     }
     
-    function copySelectedInPage(startIdx, endIdx) {
+    async function copySelectedInPage(startIdx, endIdx) {
       const selectedTexts = [];
       
       for (let i = startIdx; i < endIdx; i++) {
@@ -1405,12 +1450,19 @@
       }
       
       const combinedText = selectedTexts.join('\n\n');
-      navigator.clipboard.writeText(combinedText).then(() => {
+      navigator.clipboard.writeText(combinedText).then(async () => {
+        // Store the page number for last copied button
+        const pageSection = event.target.closest('.page-section');
+        if (pageSection) {
+          lastCopiedPageNum = parseInt(pageSection.dataset.page);
+          await saveLastCopiedPage(currentFileName, lastCopiedPageNum);
+          lastCopiedBtn.classList.add('show');
+        }
         showCopyFeedback(event.target);
       });
     }
     
-    function copyAllInPage(startIdx, endIdx, event) {
+    async function copyAllInPage(startIdx, endIdx, event) {
       const pageTexts = [];
       
       for (let i = startIdx; i < endIdx; i++) {
@@ -1418,11 +1470,12 @@
       }
       
       const combinedText = pageTexts.join('\n\n');
-      navigator.clipboard.writeText(combinedText).then(() => {
+      navigator.clipboard.writeText(combinedText).then(async () => {
         // Store the page number for last copied button
         const pageSection = event.target.closest('.page-section');
         if (pageSection) {
           lastCopiedPageNum = parseInt(pageSection.dataset.page);
+          await saveLastCopiedPage(currentFileName, lastCopiedPageNum);
           lastCopiedBtn.classList.add('show');
         }
         showCopyFeedback(event.target);
@@ -1440,15 +1493,16 @@
       }, 2000);
     }
     
-    function copyParagraph(index) {
+    async function copyParagraph(index) {
       const text = allParagraphs[index];
-      navigator.clipboard.writeText(text).then(() => {
+      navigator.clipboard.writeText(text).then(async () => {
         // Store the page number for last copied button
         const paraBtn = document.getElementById(`para-btn-${index}`);
         if (paraBtn) {
           const pageSection = paraBtn.closest('.page-section');
           if (pageSection) {
             lastCopiedPageNum = parseInt(pageSection.dataset.page);
+            await saveLastCopiedPage(currentFileName, lastCopiedPageNum);
             lastCopiedBtn.classList.add('show');
           }
         }
