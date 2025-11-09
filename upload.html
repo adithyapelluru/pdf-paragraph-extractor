@@ -234,7 +234,7 @@
     
     function initDB() {
       return new Promise((resolve, reject) => {
-        const request = indexedDB.open(dbName, 1);
+        const request = indexedDB.open(dbName, 2);
         
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
@@ -246,6 +246,10 @@
           const db = event.target.result;
           if (!db.objectStoreNames.contains(storeName)) {
             db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
+          }
+          // Add notes store for compatibility with extractor pages
+          if (!db.objectStoreNames.contains('pageNotes')) {
+            db.createObjectStore('pageNotes', { keyPath: 'pageKey' });
           }
         };
       });
@@ -361,19 +365,44 @@
     });
     
     async function handleFiles(filesList) {
-      for (const file of Array.from(filesList)) {
-        if (file.name.endsWith('.pdf') || file.name.endsWith('.epub')) {
+      const validFiles = Array.from(filesList).filter(file => 
+        file.name.endsWith('.pdf') || file.name.endsWith('.epub')
+      );
+      
+      if (validFiles.length === 0) {
+        alert('Please select PDF or EPUB files only.');
+        return;
+      }
+      
+      let uploadedCount = 0;
+      
+      for (const file of validFiles) {
+        try {
           const reader = new FileReader();
           reader.onload = async (e) => {
-            await saveFile({
-              name: file.name,
-              size: file.size,
-              uploadDate: new Date().toISOString(),
-              data: e.target.result
-            });
-            await displayFiles();
+            try {
+              await saveFile({
+                name: file.name,
+                size: file.size,
+                uploadDate: new Date().toISOString(),
+                data: e.target.result
+              });
+              uploadedCount++;
+              console.log(`Uploaded: ${file.name}`);
+              await displayFiles();
+            } catch (error) {
+              console.error('Error saving file:', error);
+              alert(`Failed to save ${file.name}: ${error.message}`);
+            }
+          };
+          reader.onerror = () => {
+            console.error('Error reading file:', file.name);
+            alert(`Failed to read ${file.name}`);
           };
           reader.readAsDataURL(file);
+        } catch (error) {
+          console.error('Error processing file:', error);
+          alert(`Failed to process ${file.name}: ${error.message}`);
         }
       }
     }
