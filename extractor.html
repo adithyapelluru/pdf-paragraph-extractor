@@ -981,6 +981,15 @@
       });
     }
     
+    // Preload speech voices (important for mobile)
+    if ('speechSynthesis' in window) {
+      // Trigger voice loading
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.addEventListener('voiceschanged', () => {
+        console.log('Voices loaded:', window.speechSynthesis.getVoices().length);
+      });
+    }
+    
     // Check if file was selected from upload page or restore from state
     window.addEventListener('load', async () => {
       await initDB();
@@ -1530,8 +1539,16 @@
       let currentWordIndex = 0;
       let boundarySupported = false;
       
+      // Check text length - mobile browsers have limits
+      const maxLength = 4000; // Safe limit for mobile
+      let textToSpeak = noteText;
+      if (noteText.length > maxLength) {
+        textToSpeak = noteText.substring(0, maxLength);
+        console.warn('Text truncated for mobile compatibility');
+      }
+      
       // Create and configure speech
-      currentSpeech = new SpeechSynthesisUtterance(noteText);
+      currentSpeech = new SpeechSynthesisUtterance(textToSpeak);
       currentSpeakingPage = pageNum;
       
       // Configure speech properties with user-selected speed
@@ -1539,10 +1556,21 @@
       currentSpeech.rate = speed;
       currentSpeech.pitch = 1.0;
       currentSpeech.volume = 1.0;
-      currentSpeech.lang = 'en-US';
       
-      console.log('Starting speech with text:', noteText.substring(0, 50) + '...');
+      // Try to get a voice (helps with mobile)
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        // Prefer English voices
+        const englishVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+        currentSpeech.voice = englishVoice;
+        currentSpeech.lang = englishVoice.lang;
+      } else {
+        currentSpeech.lang = 'en-US';
+      }
+      
+      console.log('Starting speech with text:', textToSpeak.substring(0, 50) + '...');
       console.log('Speech rate:', speed);
+      console.log('Available voices:', voices.length);
       
       // Update button state
       speakBtn.classList.add('speaking');
@@ -1601,7 +1629,18 @@
       // Handle speech error
       currentSpeech.onerror = (event) => {
         console.error('Speech error:', event);
-        alert('Speech error: ' + event.error + '. Try refreshing the page.');
+        let errorMsg = 'Speech error: ' + event.error;
+        
+        // Provide helpful messages for common mobile errors
+        if (event.error === 'synthesis-failed') {
+          errorMsg = 'Speech failed. Try:\n1. Reduce note length\n2. Check device volume\n3. Restart browser\n4. Enable speech in device settings';
+        } else if (event.error === 'not-allowed') {
+          errorMsg = 'Speech not allowed. Please interact with the page first (tap anywhere).';
+        } else if (event.error === 'network') {
+          errorMsg = 'Network error. Check your internet connection.';
+        }
+        
+        alert(errorMsg);
         speakBtn.classList.remove('speaking', 'paused');
         speakBtn.innerHTML = '🔊 Speak';
         if (stopBtn) {
@@ -1614,16 +1653,38 @@
         isPaused = false;
       };
       
+      // Mobile-specific: Load voices first if not loaded
+      if (window.speechSynthesis.getVoices().length === 0) {
+        window.speechSynthesis.addEventListener('voiceschanged', function loadVoices() {
+          const voices = window.speechSynthesis.getVoices();
+          if (voices.length > 0 && currentSpeech) {
+            const englishVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+            currentSpeech.voice = englishVoice;
+            currentSpeech.lang = englishVoice.lang;
+          }
+          window.speechSynthesis.removeEventListener('voiceschanged', loadVoices);
+        });
+      }
+      
       // Start speaking - with a small delay to ensure everything is ready
       setTimeout(() => {
         try {
-          window.speechSynthesis.speak(currentSpeech);
-          console.log('Speech queued successfully');
+          // Mobile fix: Cancel any pending speech first
+          window.speechSynthesis.cancel();
+          
+          // Small delay before speaking (helps on mobile)
+          setTimeout(() => {
+            window.speechSynthesis.speak(currentSpeech);
+            console.log('Speech queued successfully');
+          }, 50);
         } catch (error) {
           console.error('Failed to start speech:', error);
           alert('Failed to start speech: ' + error.message);
           speakBtn.classList.remove('speaking');
           speakBtn.innerHTML = '🔊 Speak';
+          if (stopBtn) {
+            stopBtn.style.display = 'none';
+          }
         }
       }, 100);
     }
