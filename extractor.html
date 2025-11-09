@@ -490,6 +490,32 @@
       display: block;
     }
     
+    .back-floating-btn {
+      position: fixed;
+      top: 30px;
+      left: 30px;
+      background: #666;
+      color: white;
+      border: none;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 24px;
+      box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .back-floating-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+      background: #555;
+    }
+    
     .back-btn {
       background: #666;
       margin-right: 10px;
@@ -635,6 +661,14 @@
         height: 45px;
         font-size: 20px;
       }
+      
+      .back-floating-btn {
+        top: 15px;
+        left: 15px;
+        width: 45px;
+        height: 45px;
+        font-size: 20px;
+      }
     }
     
     @media (max-width: 480px) {
@@ -681,6 +715,14 @@
         height: 40px;
         font-size: 18px;
       }
+      
+      .back-floating-btn {
+        top: 10px;
+        left: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+      }
     }
   </style>
 </head>
@@ -692,13 +734,10 @@
       <p style="margin-top: 10px;"><a href="index.html" style="color: white; text-decoration: underline;">Go to File Manager</a></p>
     </div>
     
-    <div class="upload-section" id="uploadSection">
+    <div class="upload-section" id="uploadSection" style="display: none;">
       <div class="upload-box" id="uploadBox">
         <div class="upload-icon">📁</div>
-        <div class="upload-text">Drop your PDF or EPUB here</div>
-        <div class="upload-hint">or click to browse</div>
-        <input type="file" id="fileInput" class="file-input" accept=".pdf,.epub">
-        <button class="btn" onclick="document.getElementById('fileInput').click()">Choose PDF/EPUB File</button>
+        <div class="upload-text">Redirecting to File Manager...</div>
       </div>
     </div>
     
@@ -730,6 +769,10 @@
   <button class="last-copied-btn" id="lastCopiedBtn" onclick="scrollToLastCopied()" title="Go to last copied page">
     📍
   </button>
+  
+  <button class="back-floating-btn" onclick="goBackToManager()" title="Back to File Manager">
+    ⬅️
+  </button>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -739,6 +782,8 @@
     let db;
     let lastCopiedPageNum = null;
     let currentFileName = '';
+    let currentFileId = null;
+    let scrollRestorePosition = 0;
     
     const uploadBox = document.getElementById('uploadBox');
     const fileInput = document.getElementById('fileInput');
@@ -823,6 +868,47 @@
       });
     }
     
+    async function saveCurrentFileState(fileId, fileName, scrollPosition) {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([notesStoreName], 'readwrite');
+        const objectStore = transaction.objectStore(notesStoreName);
+        const pageKey = '_currentFileState';
+        const request = objectStore.put({ 
+          pageKey, 
+          note: JSON.stringify({ fileId, fileName, scrollPosition, timestamp: Date.now() })
+        });
+        
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function loadCurrentFileState() {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([notesStoreName], 'readonly');
+        const objectStore = transaction.objectStore(notesStoreName);
+        const pageKey = '_currentFileState';
+        const request = objectStore.get(pageKey);
+        
+        request.onsuccess = () => {
+          if (request.result && request.result.note) {
+            try {
+              resolve(JSON.parse(request.result.note));
+            } catch (e) {
+              resolve(null);
+            }
+          } else {
+            resolve(null);
+          }
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
     async function loadLastCopiedPage(fileName) {
       if (!db) await initDB();
       
@@ -856,15 +942,29 @@
       });
     }
     
-    // Check if file was selected from upload page
+    // Check if file was selected from upload page or restore from state
     window.addEventListener('load', async () => {
       await initDB();
       pageNotes = await loadPageNotes();
       
-      const currentFileId = localStorage.getItem('currentFileId');
-      if (currentFileId) {
-        const fileData = await getFileById(parseInt(currentFileId));
+      // Check for new file from upload page
+      let fileIdToLoad = localStorage.getItem('currentFileId');
+      
+      if (fileIdToLoad) {
+        // New file selected from upload page
         localStorage.removeItem('currentFileId');
+        currentFileId = parseInt(fileIdToLoad);
+      } else {
+        // Try to restore previous state (refresh scenario)
+        const savedState = await loadCurrentFileState();
+        if (savedState && savedState.fileId) {
+          currentFileId = savedState.fileId;
+          scrollRestorePosition = savedState.scrollPosition || 0;
+        }
+      }
+      
+      if (currentFileId) {
+        const fileData = await getFileById(currentFileId);
         
         if (fileData) {
           // Convert data URL back to file
@@ -874,39 +974,18 @@
               const newFile = new File([blob], fileData.name, { type: blob.type });
               processFile(newFile);
             });
+        } else {
+          // File not found, redirect to file manager
+          window.location.href = 'upload.html';
         }
+      } else {
+        // No file selected, redirect to file manager
+        window.location.href = 'upload.html';
       }
     });
     
-    // Drag and drop
-    uploadBox.addEventListener('click', () => fileInput.click());
-    
-    uploadBox.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      uploadBox.classList.add('dragover');
-    });
-    
-    uploadBox.addEventListener('dragleave', () => {
-      uploadBox.classList.remove('dragover');
-    });
-    
-    uploadBox.addEventListener('drop', (e) => {
-      e.preventDefault();
-      uploadBox.classList.remove('dragover');
-      const file = e.dataTransfer.files[0];
-      if (file && (file.type === 'application/pdf' || file.name.endsWith('.epub'))) {
-        processFile(file);
-      }
-    });
-    
-    fileInput.addEventListener('change', (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        processFile(file);
-      }
-      // Reset input so same file can be selected again
-      e.target.value = '';
-    });
+    // Disable drag and drop and file input on extractor page
+    // Users should upload from the file manager page only
     
     async function processFile(file) {
       if (file.name.endsWith('.epub')) {
@@ -1090,6 +1169,9 @@
       // Store current file name
       currentFileName = fileName;
       
+      // Save current file state for refresh persistence
+      await saveCurrentFileState(currentFileId, fileName, 0);
+      
       // Load last copied page for this file
       const savedLastCopied = await loadLastCopiedPage(fileName);
       if (savedLastCopied !== null) {
@@ -1166,6 +1248,17 @@
         `;
         return pageHTML;
       }).join('');
+      
+      // Restore scroll position after a short delay to ensure content is rendered
+      if (scrollRestorePosition > 0) {
+        setTimeout(() => {
+          window.scrollTo({
+            top: scrollRestorePosition,
+            behavior: 'auto'
+          });
+          scrollRestorePosition = 0; // Reset after restoring
+        }, 100);
+      }
     }
     
     let noteTimeout;
@@ -1539,7 +1632,18 @@
       });
     }
     
-    function resetApp() {
+    async function resetApp() {
+      // Clear current file state
+      if (db) {
+        try {
+          const transaction = db.transaction([notesStoreName], 'readwrite');
+          const objectStore = transaction.objectStore(notesStoreName);
+          objectStore.delete('_currentFileState');
+        } catch (e) {
+          console.error('Error clearing file state:', e);
+        }
+      }
+      
       uploadSection.style.display = 'block';
       results.classList.remove('show');
       copyAllBtn.style.display = 'none';
@@ -1548,6 +1652,11 @@
       fileInput.value = '';
       allParagraphs = [];
       lastCopiedPageNum = null;
+      currentFileId = null;
+      currentFileName = '';
+      
+      // Redirect to file manager
+      window.location.href = 'upload.html';
     }
     
     // Scroll to top functionality
@@ -1578,13 +1687,30 @@
     }
     
     // Show/hide scroll to top button based on scroll position
+    // Also save scroll position for refresh persistence
+    let scrollSaveTimeout;
     window.addEventListener('scroll', () => {
       if (window.pageYOffset > 300) {
         scrollTopBtn.classList.add('show');
       } else {
         scrollTopBtn.classList.remove('show');
       }
+      
+      // Debounce scroll position saving
+      clearTimeout(scrollSaveTimeout);
+      scrollSaveTimeout = setTimeout(async () => {
+        if (currentFileId && currentFileName) {
+          await saveCurrentFileState(currentFileId, currentFileName, window.pageYOffset);
+        }
+      }, 500);
     });
+    
+    // Go back to file manager
+    function goBackToManager() {
+      if (confirm('Go back to File Manager? Any unsaved changes will be lost.')) {
+        window.location.href = 'upload.html';
+      }
+    }
   </script>
 </body>
 </html>
