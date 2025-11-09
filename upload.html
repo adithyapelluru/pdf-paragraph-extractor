@@ -135,6 +135,8 @@
       align-items: center;
       gap: 15px;
       flex: 1;
+      min-width: 0;
+      overflow: hidden;
     }
     
     .file-icon {
@@ -143,12 +145,16 @@
     
     .file-details {
       flex: 1;
+      min-width: 0;
+      overflow: hidden;
     }
     
     .file-name {
       font-weight: bold;
       color: #333;
       margin-bottom: 5px;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
     
     .file-meta {
@@ -237,6 +243,12 @@
         width: 100%;
         flex-direction: column;
         text-align: center;
+        overflow: visible;
+      }
+      
+      .file-details {
+        width: 100%;
+        overflow: visible;
       }
       
       .file-actions {
