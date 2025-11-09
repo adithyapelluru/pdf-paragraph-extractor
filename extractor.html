@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Paragraph Extractor</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 1200px;
+      width: 100%;
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      opacity: 0.9;
+      font-size: 16px;
+    }
+    
+    .upload-section {
+      padding: 40px;
+      text-align: center;
+    }
+    
+    .upload-box {
+      border: 3px dashed #667eea;
+      border-radius: 15px;
+      padding: 60px 40px;
+      background: #f8f9ff;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    
+    .upload-box:hover {
+      background: #f0f2ff;
+      border-color: #764ba2;
+    }
+    
+    .upload-box.dragover {
+      background: #e8ebff;
+      border-color: #764ba2;
+      transform: scale(1.02);
+    }
+    
+    .upload-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    
+    .upload-text {
+      font-size: 20px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+    
+    .upload-hint {
+      color: #666;
+      font-size: 14px;
+    }
+    
+    .file-input {
+      display: none;
+    }
+    
+    .btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      border-radius: 25px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: transform 0.2s;
+    }
+    
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .results {
+      padding: 40px;
+      display: none;
+    }
+    
+    .results.show {
+      display: block;
+    }
+    
+    .file-info {
+      background: #f8f9ff;
+      padding: 20px;
+      border-radius: 10px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .page-section {
+      margin-bottom: 30px;
+      background: #f8f9ff;
+      padding: 20px;
+      border-radius: 15px;
+    }
+    
+    .page-header {
+      font-size: 20px;
+      font-weight: bold;
+      color: #667eea;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #667eea;
+    }
+    
+    .paragraphs-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+      gap: 12px;
+    }
+    
+    .paragraph-item {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border-radius: 10px;
+      padding: 15px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+      font-size: 16px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .paragraph-item:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+    }
+    
+    .paragraph-item.selected {
+      background: #FF9800;
+    }
+    
+    .paragraph-item.copied {
+      background: #4CAF50;
+    }
+    
+    .para-checkbox {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    
+    .paragraph-item label {
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .page-actions {
+      margin-top: 15px;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-start;
+    }
+    
+    .page-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 15px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    
+    .page-btn:hover {
+      background: #764ba2;
+    }
+    
+    .page-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .floating-btn {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 50px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+      box-shadow: 0 5px 20px rgba(76, 175, 80, 0.4);
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+    
+    .floating-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(76, 175, 80, 0.5);
+    }
+    
+    .back-btn {
+      background: #666;
+      margin-right: 10px;
+    }
+    
+    .loading {
+      text-align: center;
+      padding: 40px;
+      display: none;
+    }
+    
+    .loading.show {
+      display: block;
+    }
+    
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>📄 PDF & EPUB Paragraph Extractor</h1>
+      <p>Upload a PDF or EPUB and copy paragraphs with ease</p>
+      <p style="margin-top: 10px;"><a href="index.html" style="color: white; text-decoration: underline;">Go to File Manager</a></p>
+    </div>
+    
+    <div class="upload-section" id="uploadSection">
+      <div class="upload-box" id="uploadBox">
+        <div class="upload-icon">📁</div>
+        <div class="upload-text">Drop your PDF or EPUB here</div>
+        <div class="upload-hint">or click to browse</div>
+        <input type="file" id="fileInput" class="file-input" accept=".pdf,.epub">
+        <button class="btn" onclick="document.getElementById('fileInput').click()">Choose PDF/EPUB File</button>
+      </div>
+    </div>
+    
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <p>Extracting paragraphs...</p>
+    </div>
+    
+    <div class="results" id="results">
+      <div class="file-info">
+        <div>
+          <strong>File:</strong> <span id="fileName"></span><br>
+          <strong>Paragraphs:</strong> <span id="paraCount"></span>
+        </div>
+        <button class="btn back-btn" onclick="resetApp()">Upload Another</button>
+      </div>
+      <div id="paragraphsContainer"></div>
+    </div>
+  </div>
+  
+  <button class="floating-btn" id="copyAllBtn" style="display: none;" onclick="copyAll()">
+    📋 Copy All
+  </button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    
+    let allParagraphs = [];
+    
+    const uploadBox = document.getElementById('uploadBox');
+    const fileInput = document.getElementById('fileInput');
+    const uploadSection = document.getElementById('uploadSection');
+    const loading = document.getElementById('loading');
+    const results = document.getElementById('results');
+    const copyAllBtn = document.getElementById('copyAllBtn');
+    
+    // Check if file was selected from upload page
+    window.addEventListener('load', () => {
+      const currentFile = localStorage.getItem('currentFile');
+      if (currentFile) {
+        const file = JSON.parse(currentFile);
+        localStorage.removeItem('currentFile');
+        
+        // Convert data URL back to file
+        fetch(file.data)
+          .then(res => res.blob())
+          .then(blob => {
+            const newFile = new File([blob], file.name, { type: blob.type });
+            processFile(newFile);
+          });
+      }
+    });
+    
+    // Drag and drop
+    uploadBox.addEventListener('click', () => fileInput.click());
+    
+    uploadBox.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      uploadBox.classList.add('dragover');
+    });
+    
+    uploadBox.addEventListener('dragleave', () => {
+      uploadBox.classList.remove('dragover');
+    });
+    
+    uploadBox.addEventListener('drop', (e) => {
+      e.preventDefault();
+      uploadBox.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && (file.type === 'application/pdf' || file.name.endsWith('.epub'))) {
+        processFile(file);
+      }
+    });
+    
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        processFile(file);
+      }
+      // Reset input so same file can be selected again
+      e.target.value = '';
+    });
+    
+    async function processFile(file) {
+      if (file.name.endsWith('.epub')) {
+        await processEPUB(file);
+      } else {
+        await processPDF(file);
+      }
+    }
+    
+    async function processEPUB(file) {
+      uploadSection.style.display = 'none';
+      loading.classList.add('show');
+      
+      try {
+        const JSZip = window.JSZip || await loadJSZip();
+        const zip = await JSZip.loadAsync(file);
+        
+        // Find all HTML/XHTML files in the EPUB
+        const htmlFiles = Object.keys(zip.files).filter(name => 
+          name.match(/\.(html|xhtml|htm)$/i) && !name.startsWith('__MACOSX')
+        );
+        
+        const pageData = [];
+        let pageNum = 1;
+        
+        for (const fileName of htmlFiles) {
+          const content = await zip.files[fileName].async('text');
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(content, 'text/html');
+          
+          // Remove script and style tags
+          doc.querySelectorAll('script, style').forEach(el => el.remove());
+          
+          // Extract paragraphs from the HTML
+          const paragraphs = [];
+          const textElements = doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6');
+          
+          textElements.forEach(el => {
+            const text = el.textContent.trim();
+            if (text.length > 30) {
+              paragraphs.push(text);
+            }
+          });
+          
+          if (paragraphs.length > 0) {
+            pageData.push({
+              pageNum: pageNum++,
+              paragraphs: paragraphs
+            });
+          }
+        }
+        
+        if (pageData.length === 0) {
+          throw new Error('No readable content found in EPUB');
+        }
+        
+        // Flatten for allParagraphs array
+        allParagraphs = pageData.flatMap(p => p.paragraphs);
+        
+        displayResults(file.name, pageData);
+      } catch (error) {
+        alert('Error processing EPUB: ' + error.message);
+        resetApp();
+      }
+    }
+    
+    async function loadJSZip() {
+      return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+        script.onload = () => resolve(window.JSZip);
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
+    
+    async function processPDF(file) {
+      uploadSection.style.display = 'none';
+      loading.classList.add('show');
+      
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+        
+        const pageData = [];
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          
+          // Group text items by line
+          const lines = [];
+          let currentLine = { items: [], y: null };
+          
+          textContent.items.forEach(item => {
+            const y = Math.round(item.transform[5]);
+            
+            // If this is a new line
+            if (currentLine.y === null || Math.abs(currentLine.y - y) > 5) {
+              if (currentLine.items.length > 0) {
+                lines.push(currentLine);
+              }
+              currentLine = { items: [item], y: y };
+            } else {
+              // Same line, add to current line
+              currentLine.items.push(item);
+            }
+          });
+          
+          // Add the last line
+          if (currentLine.items.length > 0) {
+            lines.push(currentLine);
+          }
+          
+          // Sort lines by Y position (top to bottom)
+          lines.sort((a, b) => b.y - a.y);
+          
+          // Build paragraphs from lines
+          const paragraphs = [];
+          let currentParagraph = '';
+          let lastLineY = null;
+          
+          lines.forEach(line => {
+            // Sort items in line by X position (left to right)
+            line.items.sort((a, b) => a.transform[4] - b.transform[4]);
+            
+            // Combine items in line to form text
+            const lineText = line.items.map(item => item.str).join(' ');
+            
+            // Check if this is a new paragraph
+            // Paragraph break if:
+            // 1. Large vertical gap (more than 1.5x typical line height)
+            // 2. The line is indented (first line of paragraph)
+            // 3. The previous line ended with a sentence terminator
+            
+            const isLargeGap = lastLineY !== null && (lastLineY - line.y) > 20;
+            const isIndented = line.items[0]?.transform[4] > 50;
+            const prevEndsWithTerminator = /[.!?]\s*$/.test(currentParagraph);
+            
+            if (currentParagraph && (isLargeGap || (isIndented && prevEndsWithTerminator))) {
+              paragraphs.push(currentParagraph.trim());
+              currentParagraph = lineText;
+            } else {
+              // Continue current paragraph
+              currentParagraph += (currentParagraph ? ' ' : '') + lineText;
+            }
+            
+            lastLineY = line.y;
+          });
+          
+          // Add the last paragraph
+          if (currentParagraph.trim()) {
+            paragraphs.push(currentParagraph.trim());
+          }
+          
+          // Filter out very short paragraphs (likely headers, footers, etc.)
+          const cleanParas = paragraphs
+            .map(p => p.replace(/\s+/g, ' ').trim())
+            .filter(p => p.length > 30);
+          
+          pageData.push({
+            pageNum: i,
+            paragraphs: cleanParas.length > 0 ? cleanParas : ['No paragraphs found']
+          });
+        }
+        
+        // Flatten for allParagraphs array
+        allParagraphs = pageData.flatMap(p => p.paragraphs);
+        
+        displayResults(file.name, pageData);
+      } catch (error) {
+        alert('Error processing PDF: ' + error.message);
+        resetApp();
+      }
+    }
+    
+    function displayResults(fileName, pageData) {
+      loading.classList.remove('show');
+      results.classList.add('show');
+      copyAllBtn.style.display = 'block';
+      
+      const totalParas = pageData.reduce((sum, p) => sum + p.paragraphs.length, 0);
+      document.getElementById('fileName').textContent = fileName;
+      document.getElementById('paraCount').textContent = totalParas;
+      
+      const container = document.getElementById('paragraphsContainer');
+      let globalIndex = 0;
+      
+      container.innerHTML = pageData.map(page => {
+        const pageStartIdx = globalIndex;
+        const pageHTML = `
+          <div class="page-section" data-page="${page.pageNum}">
+            <div class="page-header">Page ${page.pageNum}</div>
+            <div class="paragraphs-grid">
+              ${page.paragraphs.map((p, i) => {
+                const idx = globalIndex++;
+                return `
+                  <div class="paragraph-item" id="para-btn-${idx}">
+                    <input type="checkbox" class="para-checkbox" id="check-${idx}" data-index="${idx}" onclick="event.stopPropagation(); toggleParagraph(${idx})">
+                    <label onclick="copyParagraph(${idx})">P${i + 1}</label>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+            <div class="page-actions">
+              <button class="page-btn" onclick="selectAllInPage(${page.pageNum}, ${pageStartIdx}, ${globalIndex})">Select All</button>
+              <button class="page-btn" onclick="deselectAllInPage(${page.pageNum}, ${pageStartIdx}, ${globalIndex})">Deselect All</button>
+              <button class="page-btn" onclick="copySelectedInPage(${pageStartIdx}, ${globalIndex})">Copy Selected</button>
+              <button class="page-btn" style="background: #4CAF50;" onclick="copyAllInPage(${pageStartIdx}, ${globalIndex}, event)">📋 Copy All Page</button>
+            </div>
+          </div>
+        `;
+        return pageHTML;
+      }).join('');
+    }
+    
+    function toggleParagraph(index) {
+      const checkbox = document.getElementById('check-' + index);
+      updateParagraphStyle(index);
+    }
+    
+    function updateParagraphStyle(index) {
+      const checkbox = document.getElementById('check-' + index);
+      const btn = document.getElementById('para-btn-' + index);
+      
+      if (checkbox.checked) {
+        btn.classList.add('selected');
+      } else {
+        btn.classList.remove('selected');
+      }
+    }
+    
+    function selectAllInPage(pageNum, startIdx, endIdx) {
+      for (let i = startIdx; i < endIdx; i++) {
+        const checkbox = document.getElementById('check-' + i);
+        if (checkbox) {
+          checkbox.checked = true;
+          updateParagraphStyle(i);
+        }
+      }
+    }
+    
+    function deselectAllInPage(pageNum, startIdx, endIdx) {
+      for (let i = startIdx; i < endIdx; i++) {
+        const checkbox = document.getElementById('check-' + i);
+        if (checkbox) {
+          checkbox.checked = false;
+          updateParagraphStyle(i);
+        }
+      }
+    }
+    
+    function copySelectedInPage(startIdx, endIdx) {
+      const selectedTexts = [];
+      
+      for (let i = startIdx; i < endIdx; i++) {
+        const checkbox = document.getElementById('check-' + i);
+        if (checkbox && checkbox.checked) {
+          selectedTexts.push(allParagraphs[i]);
+        }
+      }
+      
+      if (selectedTexts.length === 0) {
+        return;
+      }
+      
+      const combinedText = selectedTexts.join('\n\n');
+      navigator.clipboard.writeText(combinedText).then(() => {
+        showCopyFeedback(event.target);
+      });
+    }
+    
+    function copyAllInPage(startIdx, endIdx, event) {
+      const pageTexts = [];
+      
+      for (let i = startIdx; i < endIdx; i++) {
+        pageTexts.push(allParagraphs[i]);
+      }
+      
+      const combinedText = pageTexts.join('\n\n');
+      navigator.clipboard.writeText(combinedText).then(() => {
+        showCopyFeedback(event.target);
+      });
+    }
+    
+    function showCopyFeedback(button) {
+      const originalText = button.textContent;
+      const originalBg = button.style.background;
+      button.textContent = '✓ Copied!';
+      button.style.background = '#4CAF50';
+      setTimeout(() => {
+        button.textContent = originalText;
+        button.style.background = originalBg;
+      }, 2000);
+    }
+    
+    function copyParagraph(index) {
+      const text = allParagraphs[index];
+      navigator.clipboard.writeText(text).then(() => {
+        const label = document.querySelector(`#para-btn-${index} label`);
+        const originalText = label.textContent;
+        label.textContent = '✓';
+        setTimeout(() => {
+          label.textContent = originalText;
+        }, 1500);
+      });
+    }
+    
+    function copyAll() {
+      const selectedTexts = [];
+      
+      // Check if any checkboxes are selected
+      document.querySelectorAll('.para-checkbox:checked').forEach(checkbox => {
+        const index = parseInt(checkbox.dataset.index);
+        selectedTexts.push(allParagraphs[index]);
+      });
+      
+      // If nothing selected, copy all
+      const textToCopy = selectedTexts.length > 0 ? selectedTexts.join('\n\n') : allParagraphs.join('\n\n');
+      const count = selectedTexts.length > 0 ? selectedTexts.length : allParagraphs.length;
+      
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        const btn = copyAllBtn;
+        const originalText = btn.textContent;
+        btn.textContent = `✓ Copied ${count}!`;
+        setTimeout(() => {
+          btn.textContent = originalText;
+        }, 2000);
+      });
+    }
+    
+    function resetApp() {
+      uploadSection.style.display = 'block';
+      results.classList.remove('show');
+      copyAllBtn.style.display = 'none';
+      fileInput.value = '';
+      allParagraphs = [];
+    }
+  </script>
+</body>
+</html>
