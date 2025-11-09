@@ -260,7 +260,9 @@
     
     .notes-display {
       width: 100%;
+      min-height: 80px;
       height: 120px;
+      max-height: 400px;
       padding: 10px;
       border: 1px solid #ddd;
       border-radius: 8px;
@@ -272,6 +274,7 @@
       background: white;
       overflow-y: auto;
       scroll-behavior: smooth;
+      resize: vertical;
     }
     
     .notes-display.editable {
@@ -312,6 +315,7 @@
       display: flex;
       gap: 8px;
       align-items: center;
+      flex-wrap: wrap;
     }
     
     .notes-btn {
@@ -326,6 +330,7 @@
       display: flex;
       align-items: center;
       gap: 5px;
+      white-space: nowrap;
     }
     
     .notes-btn:hover {
@@ -344,9 +349,37 @@
       animation: pulse 1.5s infinite;
     }
     
+    .notes-btn.paused {
+      background: #FFA726;
+    }
+    
+    .notes-btn.stop {
+      background: #f44336;
+    }
+    
+    .notes-btn.stop:hover {
+      background: #d32f2f;
+    }
+    
+    .notes-btn.font-control {
+      background: #9C27B0;
+      min-width: 32px;
+      padding: 6px 8px;
+    }
+    
+    .notes-btn.font-control:hover {
+      background: #7B1FA2;
+    }
+    
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.7; }
+    }
+    
+    .font-size-controls {
+      display: flex;
+      gap: 4px;
+      align-items: center;
     }
     
     .speed-control {
@@ -625,7 +658,13 @@
         gap: 10px;
       }
       
+      .notes-actions {
+        width: 100%;
+        justify-content: flex-start;
+      }
+      
       .notes-display {
+        min-height: 80px;
         height: 100px;
         font-size: 13px;
       }
@@ -1215,9 +1254,20 @@
               <div class="notes-header">
                 <span class="notes-title">📝 Notes</span>
                 <div class="notes-actions">
-                  <button class="notes-btn" id="speak-btn-${page.pageNum}" onclick="toggleSpeech('${pageKey}', ${page.pageNum})" title="Read notes aloud">
+                  <button class="notes-btn" id="speak-btn-${page.pageNum}" onclick="toggleSpeech('${pageKey}', ${page.pageNum})" title="Play/Pause speech">
                     🔊 Speak
                   </button>
+                  <button class="notes-btn stop" id="stop-btn-${page.pageNum}" onclick="stopSpeech(${page.pageNum})" title="Stop speech" style="display: none;">
+                    ⏹️ Stop
+                  </button>
+                  <div class="font-size-controls">
+                    <button class="notes-btn font-control" onclick="changeFontSize('${pageKey}', -1)" title="Decrease font size">
+                      A-
+                    </button>
+                    <button class="notes-btn font-control" onclick="changeFontSize('${pageKey}', 1)" title="Increase font size">
+                      A+
+                    </button>
+                  </div>
                   <span class="notes-saved" id="saved-${page.pageNum}">✓ Saved</span>
                 </div>
               </div>
@@ -1286,11 +1336,49 @@
     let currentSpeakingPage = null;
     let originalText = '';
     let highlightInterval = null;
+    let isPaused = false;
     
     function updateSpeedDisplay(pageNum) {
       const slider = document.getElementById(`speed-${pageNum}`);
       const display = document.getElementById(`speed-value-${pageNum}`);
       display.textContent = slider.value + 'x';
+    }
+    
+    // Font size control for notes
+    function changeFontSize(pageKey, delta) {
+      const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
+      if (!notesDiv) return;
+      
+      const currentSize = parseInt(window.getComputedStyle(notesDiv).fontSize);
+      const newSize = Math.max(10, Math.min(24, currentSize + delta));
+      notesDiv.style.fontSize = newSize + 'px';
+    }
+    
+    // Stop speech completely
+    function stopSpeech(pageNum) {
+      if (currentSpeech && currentSpeakingPage === pageNum) {
+        window.speechSynthesis.cancel();
+        clearInterval(highlightInterval);
+        
+        const speakBtn = document.getElementById(`speak-btn-${pageNum}`);
+        const stopBtn = document.getElementById(`stop-btn-${pageNum}`);
+        const notesDiv = document.querySelector(`[data-page-num="${pageNum}"]`);
+        
+        if (speakBtn) {
+          speakBtn.classList.remove('speaking', 'paused');
+          speakBtn.innerHTML = '🔊 Speak';
+        }
+        if (stopBtn) {
+          stopBtn.style.display = 'none';
+        }
+        if (notesDiv) {
+          clearHighlights(notesDiv);
+        }
+        
+        currentSpeech = null;
+        currentSpeakingPage = null;
+        isPaused = false;
+      }
     }
     
     function clearHighlights(notesDiv) {
@@ -1370,18 +1458,36 @@
     function toggleSpeech(pageKey, pageNum) {
       const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
       const speakBtn = document.getElementById(`speak-btn-${pageNum}`);
+      const stopBtn = document.getElementById(`stop-btn-${pageNum}`);
       const speedSlider = document.getElementById(`speed-${pageNum}`);
+      
+      if (!notesDiv || !speakBtn || !speedSlider) {
+        console.error('Required elements not found');
+        return;
+      }
+      
       const noteText = notesDiv.textContent.trim();
       
-      // If currently speaking this page, stop it
+      // If currently speaking this page, toggle pause/resume
       if (currentSpeakingPage === pageNum && currentSpeech) {
-        window.speechSynthesis.cancel();
-        clearInterval(highlightInterval);
-        speakBtn.classList.remove('speaking');
-        speakBtn.innerHTML = '🔊 Speak';
-        clearHighlights(notesDiv);
-        currentSpeech = null;
-        currentSpeakingPage = null;
+        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+          // Pause
+          window.speechSynthesis.pause();
+          isPaused = true;
+          speakBtn.classList.remove('speaking');
+          speakBtn.classList.add('paused');
+          speakBtn.innerHTML = '▶️ Resume';
+          clearInterval(highlightInterval);
+          console.log('Speech paused');
+        } else if (window.speechSynthesis.paused) {
+          // Resume
+          window.speechSynthesis.resume();
+          isPaused = false;
+          speakBtn.classList.remove('paused');
+          speakBtn.classList.add('speaking');
+          speakBtn.innerHTML = '⏸️ Pause';
+          console.log('Speech resumed');
+        }
         return;
       }
       
@@ -1413,6 +1519,9 @@
         return;
       }
       
+      // Cancel any pending speech
+      window.speechSynthesis.cancel();
+      
       // Store original text
       originalText = noteText;
       
@@ -1430,10 +1539,17 @@
       currentSpeech.rate = speed;
       currentSpeech.pitch = 1.0;
       currentSpeech.volume = 1.0;
+      currentSpeech.lang = 'en-US';
+      
+      console.log('Starting speech with text:', noteText.substring(0, 50) + '...');
+      console.log('Speech rate:', speed);
       
       // Update button state
       speakBtn.classList.add('speaking');
-      speakBtn.innerHTML = '⏸️ Stop';
+      speakBtn.innerHTML = '⏸️ Pause';
+      if (stopBtn) {
+        stopBtn.style.display = 'flex';
+      }
       
       // Try to use boundary events (more accurate)
       currentSpeech.onboundary = (event) => {
@@ -1450,6 +1566,7 @@
       
       // Handle speech start - begin highlighting when speech actually starts
       currentSpeech.onstart = () => {
+        console.log('Speech started');
         // Fallback: timer-based highlighting (faster timing for better sync)
         const avgWordDuration = (60000 / (180 * speed)); // 180 WPM for faster highlighting
         
@@ -1469,27 +1586,46 @@
       
       // Handle speech end
       currentSpeech.onend = () => {
-        speakBtn.classList.remove('speaking');
+        speakBtn.classList.remove('speaking', 'paused');
         speakBtn.innerHTML = '🔊 Speak';
+        if (stopBtn) {
+          stopBtn.style.display = 'none';
+        }
         clearInterval(highlightInterval);
         clearHighlights(notesDiv);
         currentSpeech = null;
         currentSpeakingPage = null;
+        isPaused = false;
       };
       
       // Handle speech error
       currentSpeech.onerror = (event) => {
         console.error('Speech error:', event);
-        speakBtn.classList.remove('speaking');
+        alert('Speech error: ' + event.error + '. Try refreshing the page.');
+        speakBtn.classList.remove('speaking', 'paused');
         speakBtn.innerHTML = '🔊 Speak';
+        if (stopBtn) {
+          stopBtn.style.display = 'none';
+        }
         clearInterval(highlightInterval);
         clearHighlights(notesDiv);
         currentSpeech = null;
         currentSpeakingPage = null;
+        isPaused = false;
       };
       
-      // Start speaking
-      window.speechSynthesis.speak(currentSpeech);
+      // Start speaking - with a small delay to ensure everything is ready
+      setTimeout(() => {
+        try {
+          window.speechSynthesis.speak(currentSpeech);
+          console.log('Speech queued successfully');
+        } catch (error) {
+          console.error('Failed to start speech:', error);
+          alert('Failed to start speech: ' + error.message);
+          speakBtn.classList.remove('speaking');
+          speakBtn.innerHTML = '🔊 Speak';
+        }
+      }, 100);
     }
     
     function toggleParagraph(index) {
