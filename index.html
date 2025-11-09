@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF Paragraph Extractor</title>
+  <meta http-equiv="refresh" content="0; url=upload.html">
+  <title>PDF Paragraph Extractor - Redirecting...</title>
   <style>
     * {
       margin: 0;
@@ -277,6 +278,7 @@
     <div class="header">
       <h1>📄 PDF & EPUB Paragraph Extractor</h1>
       <p>Upload a PDF or EPUB and copy paragraphs with ease</p>
+      <p style="margin-top: 10px;"><a href="upload.html" style="color: white; text-decoration: underline;">Go to File Manager</a></p>
     </div>
     
     <div class="upload-section" id="uploadSection">
@@ -322,6 +324,23 @@
     const loading = document.getElementById('loading');
     const results = document.getElementById('results');
     const copyAllBtn = document.getElementById('copyAllBtn');
+    
+    // Check if file was selected from upload page
+    window.addEventListener('load', () => {
+      const currentFile = localStorage.getItem('currentFile');
+      if (currentFile) {
+        const file = JSON.parse(currentFile);
+        localStorage.removeItem('currentFile');
+        
+        // Convert data URL back to file
+        fetch(file.data)
+          .then(res => res.blob())
+          .then(blob => {
+            const newFile = new File([blob], file.name, { type: blob.type });
+            processFile(newFile);
+          });
+      }
+    });
     
     // Drag and drop
     uploadBox.addEventListener('click', () => fileInput.click());
