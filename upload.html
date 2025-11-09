@@ -202,6 +202,58 @@
       opacity: 0.5;
     }
     
+    .sync-section {
+      margin-top: 30px;
+      padding: 20px;
+      background: #f8f9ff;
+      border-radius: 15px;
+      border: 2px solid #667eea;
+    }
+    
+    .sync-title {
+      font-size: 20px;
+      color: #667eea;
+      font-weight: bold;
+      margin-bottom: 15px;
+    }
+    
+    .sync-buttons {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    
+    .sync-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 15px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    
+    .sync-btn:hover {
+      background: #764ba2;
+      transform: translateY(-2px);
+    }
+    
+    .sync-btn.export {
+      background: #4CAF50;
+    }
+    
+    .sync-btn.export:hover {
+      background: #45a049;
+    }
+    
+    .sync-info {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #666;
+      line-height: 1.5;
+    }
+    
     /* Mobile Responsive */
     @media (max-width: 768px) {
       body {
@@ -259,6 +311,18 @@
       .action-btn {
         flex: 1;
       }
+      
+      .sync-section {
+        padding: 15px;
+      }
+      
+      .sync-buttons {
+        flex-direction: column;
+      }
+      
+      .sync-btn {
+        width: 100%;
+      }
     }
     
     @media (max-width: 480px) {
@@ -303,6 +367,18 @@
       <div class="files-section">
         <h2 class="section-title">Your Files</h2>
         <div id="fileList" class="file-list"></div>
+      </div>
+      
+      <div class="sync-section">
+        <div class="sync-title">🔄 Sync Across Devices</div>
+        <div class="sync-buttons">
+          <button class="sync-btn export" onclick="exportAllData()">📤 Export Data</button>
+          <button class="sync-btn" onclick="document.getElementById('importInput').click()">📥 Import Data</button>
+          <input type="file" id="importInput" accept=".json" style="display: none;" onchange="importAllData(event)">
+        </div>
+        <div class="sync-info">
+          Export your files and notes to sync across devices. Import the file on another device to restore everything.
+        </div>
       </div>
     </div>
   </div>
@@ -523,6 +599,116 @@
       await initDB();
       await displayFiles();
     })();
+    
+    // Export all data (files and notes)
+    async function exportAllData() {
+      try {
+        await initDB();
+        
+        // Get all files
+        const filesTransaction = db.transaction(['files'], 'readonly');
+        const filesStore = filesTransaction.objectStore('files');
+        const filesRequest = filesStore.getAll();
+        
+        const files = await new Promise((resolve, reject) => {
+          filesRequest.onsuccess = () => resolve(filesRequest.result);
+          filesRequest.onerror = () => reject(filesRequest.error);
+        });
+        
+        // Get all notes
+        const notesTransaction = db.transaction(['pageNotes'], 'readonly');
+        const notesStore = notesTransaction.objectStore('pageNotes');
+        const notesRequest = notesStore.getAll();
+        
+        const notes = await new Promise((resolve, reject) => {
+          notesRequest.onsuccess = () => resolve(notesRequest.result);
+          notesRequest.onerror = () => reject(notesRequest.error);
+        });
+        
+        // Create export data
+        const exportData = {
+          version: 1,
+          exportDate: new Date().toISOString(),
+          files: files,
+          notes: notes
+        };
+        
+        // Download as JSON file
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pdf-extractor-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        alert('✓ Data exported successfully! Use this file to import on another device.');
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Failed to export data: ' + error.message);
+      }
+    }
+    
+    // Import all data
+    async function importAllData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      try {
+        const text = await file.text();
+        const importData = JSON.parse(text);
+        
+        if (!importData.version || !importData.files || !importData.notes) {
+          throw new Error('Invalid backup file format');
+        }
+        
+        if (!confirm(`Import ${importData.files.length} files and ${importData.notes.length} notes? This will merge with existing data.`)) {
+          return;
+        }
+        
+        await initDB();
+        
+        // Import files
+        const filesTransaction = db.transaction(['files'], 'readwrite');
+        const filesStore = filesTransaction.objectStore('files');
+        
+        for (const fileData of importData.files) {
+          // Remove id to let it auto-generate (avoid conflicts)
+          const { id, ...fileWithoutId } = fileData;
+          filesStore.add(fileWithoutId);
+        }
+        
+        await new Promise((resolve, reject) => {
+          filesTransaction.oncomplete = resolve;
+          filesTransaction.onerror = () => reject(filesTransaction.error);
+        });
+        
+        // Import notes
+        const notesTransaction = db.transaction(['pageNotes'], 'readwrite');
+        const notesStore = notesTransaction.objectStore('pageNotes');
+        
+        for (const note of importData.notes) {
+          notesStore.put(note);
+        }
+        
+        await new Promise((resolve, reject) => {
+          notesTransaction.oncomplete = resolve;
+          notesTransaction.onerror = () => reject(notesTransaction.error);
+        });
+        
+        alert('✓ Data imported successfully!');
+        await displayFiles();
+        
+      } catch (error) {
+        console.error('Import error:', error);
+        alert('Failed to import data: ' + error.message);
+      }
+      
+      // Reset file input
+      event.target.value = '';
+    }
   </script>
 </body>
 </html>
