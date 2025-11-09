@@ -220,6 +220,199 @@
       cursor: not-allowed;
     }
     
+    .page-notes {
+      margin-top: 15px;
+      padding: 15px;
+      background: white;
+      border-radius: 10px;
+      border: 2px solid #667eea;
+    }
+    
+    .notes-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    
+    .notes-title {
+      font-weight: bold;
+      color: #667eea;
+      font-size: 16px;
+    }
+    
+    .notes-textarea {
+      width: 100%;
+      min-height: 80px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      transition: border-color 0.3s;
+      display: none;
+    }
+    
+    .notes-textarea:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    
+    .notes-display {
+      width: 100%;
+      height: 120px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      background: white;
+      overflow-y: auto;
+      scroll-behavior: smooth;
+    }
+    
+    .notes-display.editable {
+      cursor: text;
+    }
+    
+    .notes-display:empty:before {
+      content: attr(data-placeholder);
+      color: #999;
+    }
+    
+    .highlight-word {
+      background: #FFD700;
+      color: #000;
+      padding: 2px 0;
+      border-radius: 3px;
+      animation: highlight-pulse 0.3s ease;
+    }
+    
+    @keyframes highlight-pulse {
+      0% { background: #FFD700; }
+      50% { background: #FFA500; }
+      100% { background: #FFD700; }
+    }
+    
+    .notes-saved {
+      color: #4CAF50;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    
+    .notes-saved.show {
+      opacity: 1;
+    }
+    
+    .notes-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .notes-btn {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.3s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .notes-btn:hover {
+      background: #764ba2;
+      transform: translateY(-1px);
+    }
+    
+    .notes-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .notes-btn.speaking {
+      background: #FF9800;
+      animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+    
+    .speed-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+      padding: 8px;
+      background: #f0f2ff;
+      border-radius: 8px;
+    }
+    
+    .speed-label {
+      font-size: 12px;
+      color: #667eea;
+      font-weight: bold;
+      min-width: 80px;
+    }
+    
+    .speed-slider {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      background: #ddd;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    
+    .speed-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #667eea;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    .speed-slider::-webkit-slider-thumb:hover {
+      background: #764ba2;
+    }
+    
+    .speed-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #667eea;
+      cursor: pointer;
+      border: none;
+      transition: background 0.3s;
+    }
+    
+    .speed-slider::-moz-range-thumb:hover {
+      background: #764ba2;
+    }
+    
+    .speed-value {
+      font-size: 12px;
+      color: #667eea;
+      font-weight: bold;
+      min-width: 35px;
+      text-align: right;
+    }
+    
     .floating-btn {
       position: fixed;
       bottom: 30px;
@@ -317,6 +510,7 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     
     let allParagraphs = [];
+    let db;
     
     const uploadBox = document.getElementById('uploadBox');
     const fileInput = document.getElementById('fileInput');
@@ -325,20 +519,98 @@
     const results = document.getElementById('results');
     const copyAllBtn = document.getElementById('copyAllBtn');
     
-    // Check if file was selected from upload page
-    window.addEventListener('load', () => {
-      const currentFile = localStorage.getItem('currentFile');
-      if (currentFile) {
-        const file = JSON.parse(currentFile);
-        localStorage.removeItem('currentFile');
+    // IndexedDB setup
+    const dbName = 'FileExtractorDB';
+    const storeName = 'files';
+    const notesStoreName = 'pageNotes';
+    let pageNotes = {};
+    
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(dbName, 2);
         
-        // Convert data URL back to file
-        fetch(file.data)
-          .then(res => res.blob())
-          .then(blob => {
-            const newFile = new File([blob], file.name, { type: blob.type });
-            processFile(newFile);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          db = request.result;
+          resolve(db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          if (!db.objectStoreNames.contains(storeName)) {
+            db.createObjectStore(storeName, { keyPath: 'id', autoIncrement: true });
+          }
+          if (!db.objectStoreNames.contains(notesStoreName)) {
+            db.createObjectStore(notesStoreName, { keyPath: 'pageKey' });
+          }
+        };
+      });
+    }
+    
+    async function savePageNote(pageKey, note) {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([notesStoreName], 'readwrite');
+        const objectStore = transaction.objectStore(notesStoreName);
+        const request = objectStore.put({ pageKey, note });
+        
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function loadPageNotes() {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([notesStoreName], 'readonly');
+        const objectStore = transaction.objectStore(notesStoreName);
+        const request = objectStore.getAll();
+        
+        request.onsuccess = () => {
+          const notes = {};
+          request.result.forEach(item => {
+            notes[item.pageKey] = item.note;
           });
+          resolve(notes);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function getFileById(id) {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readonly');
+        const objectStore = transaction.objectStore(storeName);
+        const request = objectStore.get(id);
+        
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    // Check if file was selected from upload page
+    window.addEventListener('load', async () => {
+      await initDB();
+      pageNotes = await loadPageNotes();
+      
+      const currentFileId = localStorage.getItem('currentFileId');
+      if (currentFileId) {
+        const fileData = await getFileById(parseInt(currentFileId));
+        localStorage.removeItem('currentFileId');
+        
+        if (fileData) {
+          // Convert data URL back to file
+          fetch(fileData.data)
+            .then(res => res.blob())
+            .then(blob => {
+              const newFile = new File([blob], fileData.name, { type: blob.type });
+              processFile(newFile);
+            });
+        }
       }
     });
     
@@ -560,6 +832,9 @@
       
       container.innerHTML = pageData.map(page => {
         const pageStartIdx = globalIndex;
+        const pageKey = `${fileName}_page_${page.pageNum}`;
+        const savedNote = pageNotes[pageKey] || '';
+        
         const pageHTML = `
           <div class="page-section" data-page="${page.pageNum}">
             <div class="page-header">Page ${page.pageNum}</div>
@@ -580,10 +855,274 @@
               <button class="page-btn" onclick="copySelectedInPage(${pageStartIdx}, ${globalIndex})">Copy Selected</button>
               <button class="page-btn" style="background: #4CAF50;" onclick="copyAllInPage(${pageStartIdx}, ${globalIndex}, event)">📋 Copy All Page</button>
             </div>
+            <div class="page-notes">
+              <div class="notes-header">
+                <span class="notes-title">📝 Notes</span>
+                <div class="notes-actions">
+                  <button class="notes-btn" id="speak-btn-${page.pageNum}" onclick="toggleSpeech('${pageKey}', ${page.pageNum})" title="Read notes aloud">
+                    🔊 Speak
+                  </button>
+                  <span class="notes-saved" id="saved-${page.pageNum}">✓ Saved</span>
+                </div>
+              </div>
+              <div class="speed-control">
+                <label class="speed-label">Speed: <span class="speed-value" id="speed-value-${page.pageNum}">1.0x</span></label>
+                <input 
+                  type="range" 
+                  class="speed-slider" 
+                  id="speed-${page.pageNum}"
+                  min="0.5" 
+                  max="2.0" 
+                  step="0.1" 
+                  value="1.0"
+                  oninput="updateSpeedDisplay(${page.pageNum})"
+                  title="Adjust speech speed"
+                >
+              </div>
+              <div 
+                class="notes-display editable" 
+                contenteditable="true"
+                data-placeholder="Add your notes for this page..."
+                data-page-key="${pageKey}"
+                data-page-num="${page.pageNum}"
+                oninput="handleNoteChange('${pageKey}', ${page.pageNum})"
+              >${savedNote}</div>
+            </div>
           </div>
         `;
         return pageHTML;
       }).join('');
+    }
+    
+    let noteTimeout;
+    function handleNoteChange(pageKey, pageNum) {
+      const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
+      const savedIndicator = document.getElementById(`saved-${pageNum}`);
+      
+      clearTimeout(noteTimeout);
+      savedIndicator.classList.remove('show');
+      
+      noteTimeout = setTimeout(async () => {
+        const note = notesDiv.textContent;
+        pageNotes[pageKey] = note;
+        await savePageNote(pageKey, note);
+        
+        savedIndicator.classList.add('show');
+        setTimeout(() => {
+          savedIndicator.classList.remove('show');
+        }, 2000);
+      }, 500);
+    }
+    
+    // Text-to-Speech functionality
+    let currentSpeech = null;
+    let currentSpeakingPage = null;
+    let originalText = '';
+    let highlightInterval = null;
+    
+    function updateSpeedDisplay(pageNum) {
+      const slider = document.getElementById(`speed-${pageNum}`);
+      const display = document.getElementById(`speed-value-${pageNum}`);
+      display.textContent = slider.value + 'x';
+    }
+    
+    function clearHighlights(notesDiv) {
+      if (originalText) {
+        notesDiv.textContent = originalText;
+        originalText = '';
+      }
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    function scrollToHighlight(notesDiv) {
+      const highlightedWord = notesDiv.querySelector('.highlight-word');
+      if (highlightedWord) {
+        // Get the position of the highlighted word relative to the container
+        const containerRect = notesDiv.getBoundingClientRect();
+        const wordRect = highlightedWord.getBoundingClientRect();
+        
+        // Calculate if the word is outside the visible area
+        const isAbove = wordRect.top < containerRect.top;
+        const isBelow = wordRect.bottom > containerRect.bottom;
+        
+        if (isAbove || isBelow) {
+          // Scroll to center the highlighted word
+          const wordTop = highlightedWord.offsetTop;
+          const containerHeight = notesDiv.clientHeight;
+          const wordHeight = highlightedWord.offsetHeight;
+          
+          notesDiv.scrollTop = wordTop - (containerHeight / 2) + (wordHeight / 2);
+        }
+      }
+    }
+    
+    function highlightTextAtPosition(notesDiv, charIndex, text) {
+      // Find word boundaries around the character position
+      let wordStart = charIndex;
+      let wordEnd = charIndex;
+      
+      // Find start of word
+      while (wordStart > 0 && !/\s/.test(text[wordStart - 1])) {
+        wordStart--;
+      }
+      
+      // Find end of word
+      while (wordEnd < text.length && !/\s/.test(text[wordEnd])) {
+        wordEnd++;
+      }
+      
+      // Build HTML with highlighted word
+      const before = escapeHtml(text.substring(0, wordStart));
+      const word = escapeHtml(text.substring(wordStart, wordEnd));
+      const after = escapeHtml(text.substring(wordEnd));
+      
+      notesDiv.innerHTML = before + '<span class="highlight-word">' + word + '</span>' + after;
+      
+      // Auto-scroll to keep highlighted word visible
+      scrollToHighlight(notesDiv);
+    }
+    
+    function highlightWordByIndex(notesDiv, wordIndex, words) {
+      const htmlParts = words.map((word, idx) => {
+        if (idx === wordIndex) {
+          return '<span class="highlight-word">' + escapeHtml(word) + '</span>';
+        }
+        return escapeHtml(word);
+      });
+      notesDiv.innerHTML = htmlParts.join(' ');
+      
+      // Auto-scroll to keep highlighted word visible
+      scrollToHighlight(notesDiv);
+    }
+    
+    function toggleSpeech(pageKey, pageNum) {
+      const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
+      const speakBtn = document.getElementById(`speak-btn-${pageNum}`);
+      const speedSlider = document.getElementById(`speed-${pageNum}`);
+      const noteText = notesDiv.textContent.trim();
+      
+      // If currently speaking this page, stop it
+      if (currentSpeakingPage === pageNum && currentSpeech) {
+        window.speechSynthesis.cancel();
+        clearInterval(highlightInterval);
+        speakBtn.classList.remove('speaking');
+        speakBtn.innerHTML = '🔊 Speak';
+        clearHighlights(notesDiv);
+        currentSpeech = null;
+        currentSpeakingPage = null;
+        return;
+      }
+      
+      // Stop any other speech
+      if (currentSpeech) {
+        window.speechSynthesis.cancel();
+        clearInterval(highlightInterval);
+        if (currentSpeakingPage !== null) {
+          const prevBtn = document.getElementById(`speak-btn-${currentSpeakingPage}`);
+          const prevNotesDiv = document.querySelector(`[data-page-num="${currentSpeakingPage}"]`);
+          if (prevBtn) {
+            prevBtn.classList.remove('speaking');
+            prevBtn.innerHTML = '🔊 Speak';
+          }
+          if (prevNotesDiv) {
+            clearHighlights(prevNotesDiv);
+          }
+        }
+      }
+      
+      if (!noteText) {
+        alert('No notes to read. Please add some notes first.');
+        return;
+      }
+      
+      // Check if speech synthesis is supported
+      if (!('speechSynthesis' in window)) {
+        alert('Text-to-speech is not supported in your browser.');
+        return;
+      }
+      
+      // Store original text
+      originalText = noteText;
+      
+      // Split text into words for fallback highlighting
+      const words = noteText.split(/\s+/);
+      let currentWordIndex = 0;
+      let boundarySupported = false;
+      
+      // Create and configure speech
+      currentSpeech = new SpeechSynthesisUtterance(noteText);
+      currentSpeakingPage = pageNum;
+      
+      // Configure speech properties with user-selected speed
+      const speed = parseFloat(speedSlider.value);
+      currentSpeech.rate = speed;
+      currentSpeech.pitch = 1.0;
+      currentSpeech.volume = 1.0;
+      
+      // Update button state
+      speakBtn.classList.add('speaking');
+      speakBtn.innerHTML = '⏸️ Stop';
+      
+      // Try to use boundary events (more accurate)
+      currentSpeech.onboundary = (event) => {
+        if (event.name === 'word' && event.charIndex !== undefined) {
+          boundarySupported = true;
+          // Clear the fallback interval once we know boundary events work
+          if (highlightInterval) {
+            clearInterval(highlightInterval);
+            highlightInterval = null;
+          }
+          highlightTextAtPosition(notesDiv, event.charIndex, noteText);
+        }
+      };
+      
+      // Handle speech start - begin highlighting when speech actually starts
+      currentSpeech.onstart = () => {
+        // Fallback: timer-based highlighting (faster timing for better sync)
+        const avgWordDuration = (60000 / (180 * speed)); // 180 WPM for faster highlighting
+        
+        // Start highlighting with first word
+        if (words.length > 0) {
+          highlightWordByIndex(notesDiv, 0, words);
+          currentWordIndex = 1;
+        }
+        
+        highlightInterval = setInterval(() => {
+          if (!boundarySupported && currentWordIndex < words.length) {
+            highlightWordByIndex(notesDiv, currentWordIndex, words);
+            currentWordIndex++;
+          }
+        }, avgWordDuration);
+      };
+      
+      // Handle speech end
+      currentSpeech.onend = () => {
+        speakBtn.classList.remove('speaking');
+        speakBtn.innerHTML = '🔊 Speak';
+        clearInterval(highlightInterval);
+        clearHighlights(notesDiv);
+        currentSpeech = null;
+        currentSpeakingPage = null;
+      };
+      
+      // Handle speech error
+      currentSpeech.onerror = (event) => {
+        console.error('Speech error:', event);
+        speakBtn.classList.remove('speaking');
+        speakBtn.innerHTML = '🔊 Speak';
+        clearInterval(highlightInterval);
+        clearHighlights(notesDiv);
+        currentSpeech = null;
+        currentSpeakingPage = null;
+      };
+      
+      // Start speaking
+      window.speechSynthesis.speak(currentSpeech);
     }
     
     function toggleParagraph(index) {
