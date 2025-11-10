@@ -2255,6 +2255,19 @@
       // Show modal
       modal.classList.add('show');
       
+      // Request true fullscreen
+      if (modal.requestFullscreen) {
+        modal.requestFullscreen().catch(err => {
+          console.log('Fullscreen request failed:', err);
+        });
+      } else if (modal.webkitRequestFullscreen) {
+        modal.webkitRequestFullscreen();
+      } else if (modal.mozRequestFullScreen) {
+        modal.mozRequestFullScreen();
+      } else if (modal.msRequestFullscreen) {
+        modal.msRequestFullscreen();
+      }
+      
       // Focus on content
       setTimeout(() => {
         fullscreenContent.focus();
@@ -2269,6 +2282,20 @@
       const fullscreenContent = document.getElementById('fullscreenNotesContent');
       
       if (!modal || !fullscreenContent) return;
+      
+      // Exit fullscreen mode
+      if (document.fullscreenElement || document.webkitFullscreenElement || 
+          document.mozFullScreenElement || document.msFullscreenElement) {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+          document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+      }
       
       // Save content back to original notes
       if (currentFullscreenPageKey && currentFullscreenPageNum) {
@@ -2341,6 +2368,24 @@
         }
       }
     });
+    
+    // Handle fullscreen change events (when user exits fullscreen via browser controls)
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    function handleFullscreenChange() {
+      const modal = document.getElementById('fullscreenModal');
+      
+      // If we exited fullscreen but modal is still showing, close it
+      if (modal && modal.classList.contains('show')) {
+        if (!document.fullscreenElement && !document.webkitFullscreenElement && 
+            !document.mozFullScreenElement && !document.msFullscreenElement) {
+          closeFullscreenNotes();
+        }
+      }
+    }
   </script>
 </body>
 </html>
