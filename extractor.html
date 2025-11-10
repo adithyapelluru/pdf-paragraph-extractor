@@ -1185,7 +1185,6 @@
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     
@@ -1505,61 +1504,96 @@
       uploadSection.style.display = 'none';
       loading.classList.add('show');
       
-      const loadingText = document.querySelector('.loading p');
-      
       try {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
         
         const pageData = [];
-        
         for (let i = 1; i <= pdf.numPages; i++) {
-          loadingText.textContent = `Processing page ${i} of ${pdf.numPages}...`;
-          
           const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
           
-          // Render page to canvas at high resolution
-          const scale = 2.0; // Higher resolution for better OCR
-          const viewport = page.getViewport({ scale });
+          // Group text items by line based on Y position
+          const lines = [];
+          let currentLine = { items: [], y: null };
           
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
+          textContent.items.forEach(item => {
+            if (!item.str || item.str.trim() === '') return; // Skip empty items
+            
+            const y = Math.round(item.transform[5]);
+            
+            // If this is a new line (different Y position)
+            if (currentLine.y === null || Math.abs(currentLine.y - y) > 3) {
+              if (currentLine.items.length > 0) {
+                lines.push(currentLine);
+              }
+              currentLine = { items: [item], y: y };
+            } else {
+              // Same line, add to current line
+              currentLine.items.push(item);
+            }
+          });
           
-          await page.render({
-            canvasContext: context,
-            viewport: viewport
-          }).promise;
+          // Add the last line
+          if (currentLine.items.length > 0) {
+            lines.push(currentLine);
+          }
           
-          // Convert canvas to image for OCR
-          const imageData = canvas.toDataURL('image/png');
+          // Sort lines by Y position (top to bottom)
+          lines.sort((a, b) => b.y - a.y);
           
-          // Perform OCR on the image
-          loadingText.textContent = `OCR page ${i} of ${pdf.numPages}...`;
+          // Build paragraphs from lines with simpler logic
+          const paragraphs = [];
+          let currentParagraph = '';
+          let lastLineY = null;
           
-          const { data: { text } } = await Tesseract.recognize(
-            imageData,
-            'eng',
-            {
-              logger: info => {
-                if (info.status === 'recognizing text') {
-                  const progress = Math.round(info.progress * 100);
-                  loadingText.textContent = `OCR page ${i}/${pdf.numPages}: ${progress}%`;
+          lines.forEach(line => {
+            // Sort items in line by X position (left to right)
+            line.items.sort((a, b) => a.transform[4] - b.transform[4]);
+            
+            // Combine items in line to form text
+            const lineText = line.items.map(item => item.str).join(' ').trim();
+            
+            if (!lineText) return; // Skip empty lines
+            
+            // Check for paragraph break (larger vertical gap)
+            const verticalGap = lastLineY !== null ? (lastLineY - line.y) : 0;
+            const isLargeGap = verticalGap > 15; // Paragraph break threshold
+            
+            if (currentParagraph && isLargeGap) {
+              // Save current paragraph and start new one
+              paragraphs.push(currentParagraph.trim());
+              currentParagraph = lineText;
+            } else {
+              // Continue current paragraph
+              if (currentParagraph) {
+                // Add space between lines unless previous line ends with hyphen
+                if (currentParagraph.endsWith('-')) {
+                  currentParagraph = currentParagraph.slice(0, -1) + lineText;
+                } else {
+                  currentParagraph += ' ' + lineText;
                 }
+              } else {
+                currentParagraph = lineText;
               }
             }
-          );
+            
+            lastLineY = line.y;
+          });
           
-          // Split text into paragraphs
-          const paragraphs = text
-            .split(/\n\s*\n/) // Split by double line breaks
-            .map(p => p.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim())
-            .filter(p => p.length > 0);
+          // Add the last paragraph
+          if (currentParagraph.trim()) {
+            paragraphs.push(currentParagraph.trim());
+          }
+          
+          // Clean up paragraphs - only remove excessive whitespace, keep all content
+          const cleanParas = paragraphs
+            .map(p => p.replace(/\s+/g, ' ').trim())
+            .filter(p => p.length > 0); // Keep everything, even short text
           
           pageData.push({
             pageNum: i,
-            paragraphs: paragraphs.length > 0 ? paragraphs : ['No text found on this page']
+            paragraphs: cleanParas.length > 0 ? cleanParas : ['No text found on this page']
           });
         }
         
@@ -1569,8 +1603,7 @@
         displayResults(file.name, pageData);
       } catch (error) {
         console.error('Error processing PDF:', error);
-        loadingText.textContent = 'Error processing PDF. Please try again.';
-        setTimeout(() => resetApp(), 3000);
+        resetApp();
       }
     }
     
