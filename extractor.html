@@ -298,27 +298,7 @@
       user-select: text;
     }
     
-    .notes-image {
-      max-width: 100%;
-      height: auto;
-      margin: 10px 0;
-      border-radius: 8px;
-      border: 2px solid #667eea;
-      cursor: pointer;
-      transition: transform 0.3s;
-    }
-    
-    .notes-image:hover {
-      transform: scale(1.02);
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-    }
-    
-    .notes-images-container {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 10px;
-    }
+
     
     .notes-display:empty:before {
       content: attr(data-placeholder);
@@ -1454,7 +1434,7 @@
     // ============================================
     
     let allParagraphs = [];
-    let allPageData = []; // Store complete page data including images
+    let allPageData = []; // Store complete page data
     let db;
     let lastCopiedPageNum = null;
     let currentFileName = '';
@@ -1746,9 +1726,9 @@
           throw new Error('No readable content found in EPUB');
         }
         
-        // Flatten for allParagraphs array and store complete page data (EPUB has no images)
+        // Flatten for allParagraphs array
         allParagraphs = pageData.flatMap(p => p.paragraphs);
-        allPageData = pageData.map(p => ({ ...p, images: [] }));
+        allPageData = pageData;
         
         displayResults(file.name, pageData);
       } catch (error) {
@@ -1767,111 +1747,7 @@
       });
     }
     
-    // Extract images from PDF page
-    async function extractImagesFromPage(page) {
-      const images = [];
-      
-      try {
-        const ops = await page.getOperatorList();
-        const viewport = page.getViewport({ scale: 1.5 });
-        
-        // Create a canvas to render the page
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        
-        // Render the page
-        await page.render({
-          canvasContext: context,
-          viewport: viewport
-        }).promise;
-        
-        // Look for image operations
-        for (let i = 0; i < ops.fnArray.length; i++) {
-          // Check if this is an image operation (paintImageXObject or paintInlineImageXObject)
-          if (ops.fnArray[i] === pdfjsLib.OPS.paintImageXObject || 
-              ops.fnArray[i] === pdfjsLib.OPS.paintInlineImageXObject) {
-            
-            try {
-              const imageName = ops.argsArray[i][0];
-              
-              // Get the image from the page
-              const image = await page.objs.get(imageName);
-              
-              if (image && image.width && image.height) {
-                // Create a canvas for this image
-                const imgCanvas = document.createElement('canvas');
-                const imgContext = imgCanvas.getContext('2d');
-                imgCanvas.width = image.width;
-                imgCanvas.height = image.height;
-                
-                // Draw the image data
-                const imgData = imgContext.createImageData(image.width, image.height);
-                
-                if (image.data) {
-                  // Convert image data to RGBA
-                  const data = image.data;
-                  for (let j = 0; j < data.length; j += 3) {
-                    imgData.data[j * 4 / 3] = data[j];       // R
-                    imgData.data[j * 4 / 3 + 1] = data[j + 1]; // G
-                    imgData.data[j * 4 / 3 + 2] = data[j + 2]; // B
-                    imgData.data[j * 4 / 3 + 3] = 255;         // A
-                  }
-                  
-                  imgContext.putImageData(imgData, 0, 0);
-                  
-                  // Convert to data URL
-                  const dataUrl = imgCanvas.toDataURL('image/png');
-                  images.push(dataUrl);
-                }
-              }
-            } catch (imgError) {
-              console.warn('Failed to extract image:', imgError);
-            }
-          }
-        }
-        
-        // Fallback: If no images found via operations, try to extract from rendered canvas
-        if (images.length === 0) {
-          // Check if the page has significant non-white content that might be images
-          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-          const hasContent = checkForImageContent(imageData);
-          
-          if (hasContent) {
-            // Store the full page render as an image
-            images.push(canvas.toDataURL('image/png'));
-          }
-        }
-        
-      } catch (error) {
-        console.error('Error extracting images from page:', error);
-      }
-      
-      return images;
-    }
-    
-    // Check if image data contains significant content (not just white/blank)
-    function checkForImageContent(imageData) {
-      const data = imageData.data;
-      let nonWhitePixels = 0;
-      const threshold = 250; // Consider pixels darker than this as content
-      
-      // Sample every 10th pixel for performance
-      for (let i = 0; i < data.length; i += 40) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        
-        if (r < threshold || g < threshold || b < threshold) {
-          nonWhitePixels++;
-        }
-      }
-      
-      // If more than 5% of sampled pixels are non-white, consider it has content
-      const sampledPixels = data.length / 40;
-      return (nonWhitePixels / sampledPixels) > 0.05;
-    }
+
     
     async function processPDF(file) {
       uploadSection.style.display = 'none';
@@ -1885,9 +1761,6 @@
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          
-          // Extract images from the page
-          const pageImages = await extractImagesFromPage(page);
           
           // Group text items by line based on Y position
           const lines = [];
@@ -1969,8 +1842,7 @@
           
           pageData.push({
             pageNum: i,
-            paragraphs: cleanParas.length > 0 ? cleanParas : ['No text found on this page'],
-            images: pageImages
+            paragraphs: cleanParas.length > 0 ? cleanParas : ['No text found on this page']
           });
         }
         
@@ -2995,36 +2867,12 @@
       // Get the notes div for this page
       const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
       if (notesDiv) {
-        // Clear existing content
-        notesDiv.innerHTML = '';
+        // Set the text content
+        notesDiv.textContent = combinedText;
         
-        // Add text content
-        const textNode = document.createTextNode(combinedText);
-        notesDiv.appendChild(textNode);
-        
-        // Find and add images for this page
-        const pageData = allPageData.find(p => p.pageNum === pageNum);
-        if (pageData && pageData.images && pageData.images.length > 0) {
-          const imagesContainer = document.createElement('div');
-          imagesContainer.className = 'notes-images-container';
-          
-          pageData.images.forEach((imageDataUrl, index) => {
-            const img = document.createElement('img');
-            img.src = imageDataUrl;
-            img.className = 'notes-image';
-            img.alt = `Page ${pageNum} Image ${index + 1}`;
-            img.title = 'Click to view full size';
-            img.onclick = () => openImageModal(imageDataUrl);
-            imagesContainer.appendChild(img);
-          });
-          
-          notesDiv.appendChild(imagesContainer);
-        }
-        
-        // Save to database (text + images HTML)
-        const noteContent = notesDiv.innerHTML;
-        pageNotes[pageKey] = noteContent;
-        await savePageNote(pageKey, noteContent);
+        // Save to database
+        pageNotes[pageKey] = combinedText;
+        await savePageNote(pageKey, combinedText);
         
         // Show saved indicator
         const savedIndicator = document.getElementById(`saved-${pageNum}`);
@@ -3048,36 +2896,7 @@
       }
     }
     
-    // Open image in modal
-    function openImageModal(imageUrl) {
-      const modal = document.createElement('div');
-      modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.9);
-        z-index: 10000;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 20px;
-      `;
-      
-      const img = document.createElement('img');
-      img.src = imageUrl;
-      img.style.cssText = `
-        max-width: 90%;
-        max-height: 90%;
-        object-fit: contain;
-        border-radius: 10px;
-      `;
-      
-      modal.appendChild(img);
-      modal.onclick = () => document.body.removeChild(modal);
-      document.body.appendChild(modal);
-    }
+
     
     function showCopyFeedback(button) {
       const originalText = button.textContent;
