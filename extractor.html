@@ -296,6 +296,15 @@
       resize: vertical;
     }
     
+    .notes-display img {
+      max-width: 100%;
+      height: auto;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 2px solid #667eea;
+      display: block;
+    }
+    
     .notes-display.editable {
       cursor: text;
     }
@@ -525,6 +534,15 @@
       background: #f8f9ff;
       outline: none;
       resize: none;
+    }
+    
+    .fullscreen-notes img {
+      max-width: 100%;
+      height: auto;
+      margin: 15px 0;
+      border-radius: 10px;
+      border: 3px solid #667eea;
+      display: block;
     }
     
     .fullscreen-notes:empty:before {
@@ -1190,6 +1208,7 @@
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     
     let allParagraphs = [];
+    let pageImages = {}; // Store page images by page number
     let db;
     let lastCopiedPageNum = null;
     let currentFileName = '';
@@ -1445,24 +1464,7 @@
     // Users should upload from the file manager page only
     
     async function processFile(file) {
-      // Check if we already have extracted data for this file
-      const cachedData = await loadExtractedData(currentFileId);
-      
-      if (cachedData && cachedData.pageData) {
-        console.log('Using cached extraction data');
-        loading.classList.add('show');
-        document.querySelector('.loading p').textContent = 'Loading cached data...';
-        
-        // Use cached data
-        allParagraphs = cachedData.pageData.flatMap(p => p.paragraphs);
-        
-        setTimeout(() => {
-          displayResults(cachedData.fileName, cachedData.pageData);
-        }, 300);
-        return;
-      }
-      
-      // No cached data, extract from file
+      // Always extract from file (no caching)
       if (file.name.endsWith('.epub')) {
         await processEPUB(file);
       } else {
@@ -1539,9 +1541,6 @@
         // Flatten for allParagraphs array
         allParagraphs = pageData.flatMap(p => p.paragraphs);
         
-        // Save extracted data to cache
-        await saveExtractedData(currentFileId, file.name, pageData);
-        
         displayResults(file.name, pageData);
       } catch (error) {
         console.error('Error processing EPUB:', error);
@@ -1590,14 +1589,14 @@
             viewport: viewport
           }).promise;
           
-          // Convert canvas to image for OCR
-          const imageData = canvas.toDataURL('image/png');
+          // Convert canvas to image for OCR and storage
+          const pageImageData = canvas.toDataURL('image/png');
           
           // Perform OCR on the image
           loadingText.textContent = `OCR page ${i} of ${pdf.numPages}...`;
           
           const { data: { text } } = await Tesseract.recognize(
-            imageData,
+            pageImageData,
             'eng',
             {
               logger: info => {
@@ -1617,15 +1616,19 @@
           
           pageData.push({
             pageNum: i,
-            paragraphs: paragraphs.length > 0 ? paragraphs : ['No text found on this page']
+            paragraphs: paragraphs.length > 0 ? paragraphs : ['No text found on this page'],
+            pageImage: pageImageData // Store the page image
           });
         }
         
-        // Flatten for allParagraphs array
+        // Flatten for allParagraphs array and store page images
         allParagraphs = pageData.flatMap(p => p.paragraphs);
-        
-        // Save extracted data to cache
-        await saveExtractedData(currentFileId, file.name, pageData);
+        pageImages = {};
+        pageData.forEach(p => {
+          if (p.pageImage) {
+            pageImages[p.pageNum] = p.pageImage;
+          }
+        });
         
         displayResults(file.name, pageData);
       } catch (error) {
@@ -1735,7 +1738,7 @@
                 data-page-key="${pageKey}"
                 data-page-num="${page.pageNum}"
                 oninput="handleNoteChange('${pageKey}', ${page.pageNum})"
-              >${savedNote}</div>
+              ></div>
               <div class="notes-resize-handle" data-page-key="${pageKey}">
                 ⋮⋮⋮ Drag to resize
               </div>
@@ -1744,6 +1747,18 @@
         `;
         return pageHTML;
       }).join('');
+      
+      // Set saved notes content (after HTML is rendered)
+      pageData.forEach(page => {
+        const pageKey = `${fileName}_page_${page.pageNum}`;
+        const savedNote = pageNotes[pageKey] || '';
+        if (savedNote) {
+          const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
+          if (notesDiv) {
+            notesDiv.innerHTML = savedNote;
+          }
+        }
+      });
       
       // Add resize functionality for mobile
       setTimeout(() => {
@@ -1811,7 +1826,7 @@
       savedIndicator.classList.remove('show');
       
       noteTimeout = setTimeout(async () => {
-        const note = notesDiv.textContent;
+        const note = notesDiv.innerHTML; // Save HTML to preserve images
         pageNotes[pageKey] = note;
         await savePageNote(pageKey, note);
         
@@ -2547,12 +2562,30 @@
       // Get the notes div for this page
       const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
       if (notesDiv) {
-        // Set the text content
-        notesDiv.textContent = combinedText;
+        // Clear existing content
+        notesDiv.innerHTML = '';
         
-        // Save to database
-        pageNotes[pageKey] = combinedText;
-        await savePageNote(pageKey, combinedText);
+        // Add page image if available
+        if (pageImages[pageNum]) {
+          const img = document.createElement('img');
+          img.src = pageImages[pageNum];
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+          img.style.marginBottom = '15px';
+          img.style.borderRadius = '8px';
+          img.style.border = '2px solid #667eea';
+          img.style.display = 'block';
+          notesDiv.appendChild(img);
+        }
+        
+        // Add text content
+        const textNode = document.createTextNode(combinedText);
+        notesDiv.appendChild(textNode);
+        
+        // Save to database (save HTML with image)
+        const noteContent = notesDiv.innerHTML;
+        pageNotes[pageKey] = noteContent;
+        await savePageNote(pageKey, noteContent);
         
         // Show saved indicator
         const savedIndicator = document.getElementById(`saved-${pageNum}`);
@@ -2902,13 +2935,8 @@
       currentFullscreenPageKey = pageKey;
       currentFullscreenPageNum = pageNum;
       
-      // Copy content to fullscreen (preserve HTML if speech is active)
-      if (currentSpeakingPage === pageNum && originalText) {
-        // Speech is active, copy HTML to preserve highlighting
-        fullscreenContent.innerHTML = notesDiv.innerHTML;
-      } else {
-        fullscreenContent.textContent = notesDiv.textContent;
-      }
+      // Copy content to fullscreen (preserve HTML including images)
+      fullscreenContent.innerHTML = notesDiv.innerHTML;
       
       fullscreenTitle.textContent = `Notes - Page ${pageNum}`;
       
@@ -2961,12 +2989,8 @@
       if (currentFullscreenPageKey && currentFullscreenPageNum) {
         const notesDiv = document.querySelector(`[data-page-key="${currentFullscreenPageKey}"]`);
         if (notesDiv) {
-          // If speech is active, preserve HTML structure
-          if (currentSpeakingPage === currentFullscreenPageNum && originalText) {
-            notesDiv.innerHTML = fullscreenContent.innerHTML;
-          } else {
-            notesDiv.textContent = fullscreenContent.textContent;
-          }
+          // Always preserve HTML structure (including images)
+          notesDiv.innerHTML = fullscreenContent.innerHTML;
           
           // Trigger save (only if not currently speaking)
           if (currentSpeakingPage !== currentFullscreenPageNum) {
@@ -2997,14 +3021,14 @@
       
       // Don't sync back if speech is active (to avoid breaking highlighting)
       if (currentSpeakingPage !== currentFullscreenPageNum) {
-        // Update original notes in real-time
-        notesDiv.textContent = fullscreenContent.textContent;
+        // Update original notes in real-time (preserve HTML)
+        notesDiv.innerHTML = fullscreenContent.innerHTML;
       }
       
       // Debounced save
       clearTimeout(fullscreenNoteTimeout);
       fullscreenNoteTimeout = setTimeout(async () => {
-        const note = fullscreenContent.textContent;
+        const note = fullscreenContent.innerHTML; // Save HTML to preserve images
         pageNotes[currentFullscreenPageKey] = note;
         await savePageNote(currentFullscreenPageKey, note);
         
