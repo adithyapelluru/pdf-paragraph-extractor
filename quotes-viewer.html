@@ -409,19 +409,44 @@
         return;
       }
       
-      container.innerHTML = quotes.map(quote => `
-        <div class="item">
-          <div class="item-header">
-            <div class="item-date">📅 ${formatDate(quote.date)}</div>
-            <div class="item-actions">
-              <button class="item-btn" onclick="copyToClipboard('${quote.text.replace(/'/g, "\\'")}')">📋 Copy</button>
-              <button class="item-btn delete" onclick="deleteQuote(${quote.id})">🗑️ Delete</button>
+      // Group quotes by date
+      const groupedQuotes = {};
+      quotes.forEach(quote => {
+        const dateKey = new Date(quote.date).toLocaleDateString();
+        if (!groupedQuotes[dateKey]) {
+          groupedQuotes[dateKey] = [];
+        }
+        groupedQuotes[dateKey].push(quote);
+      });
+      
+      // Build HTML with date headers
+      let html = '';
+      Object.keys(groupedQuotes).forEach(dateKey => {
+        html += `
+          <div style="margin-bottom: 30px;">
+            <h3 style="color: var(--text-color); font-size: 20px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--border-color);">
+              📅 ${dateKey}
+            </h3>
+            <div style="display: grid; gap: 15px;">
+              ${groupedQuotes[dateKey].map(quote => `
+                <div class="item">
+                  <div class="item-header">
+                    <div class="item-date" style="font-size: 12px; color: var(--text-secondary);">${new Date(quote.date).toLocaleTimeString()}</div>
+                    <div class="item-actions">
+                      <button class="item-btn" onclick="copyToClipboard('${quote.text.replace(/'/g, "\\'")}')">📋 Copy</button>
+                      <button class="item-btn delete" onclick="deleteQuote(${quote.id})">🗑️ Delete</button>
+                    </div>
+                  </div>
+                  <div class="quote-text">"${quote.text}"</div>
+                  ${quote.source ? `<div class="quote-source">— ${quote.source}</div>` : ''}
+                </div>
+              `).join('')}
             </div>
           </div>
-          <div class="quote-text">"${quote.text}"</div>
-          ${quote.source ? `<div class="quote-source">— ${quote.source}</div>` : ''}
-        </div>
-      `).join('');
+        `;
+      });
+      
+      container.innerHTML = html;
     }
     
     async function displayMeanings() {
@@ -439,19 +464,44 @@
         return;
       }
       
-      container.innerHTML = meanings.map(meaning => `
-        <div class="item">
-          <div class="item-header">
-            <div class="item-date">📅 ${formatDate(meaning.date)}</div>
-            <div class="item-actions">
-              <button class="item-btn" onclick="copyToClipboard('${meaning.word}: ${meaning.definition.replace(/'/g, "\\'")}')">📋 Copy</button>
-              <button class="item-btn delete" onclick="deleteMeaning(${meaning.id})">🗑️ Delete</button>
+      // Group meanings by date
+      const groupedMeanings = {};
+      meanings.forEach(meaning => {
+        const dateKey = new Date(meaning.date).toLocaleDateString();
+        if (!groupedMeanings[dateKey]) {
+          groupedMeanings[dateKey] = [];
+        }
+        groupedMeanings[dateKey].push(meaning);
+      });
+      
+      // Build HTML with date headers
+      let html = '';
+      Object.keys(groupedMeanings).forEach(dateKey => {
+        html += `
+          <div style="margin-bottom: 30px;">
+            <h3 style="color: var(--text-color); font-size: 20px; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid var(--border-color);">
+              📅 ${dateKey}
+            </h3>
+            <div style="display: grid; gap: 15px;">
+              ${groupedMeanings[dateKey].map(meaning => `
+                <div class="item">
+                  <div class="item-header">
+                    <div class="item-date" style="font-size: 12px; color: var(--text-secondary);">${new Date(meaning.date).toLocaleTimeString()}</div>
+                    <div class="item-actions">
+                      <button class="item-btn" onclick="copyToClipboard('${meaning.word}: ${meaning.definition.replace(/'/g, "\\'")}')">📋 Copy</button>
+                      <button class="item-btn delete" onclick="deleteMeaning(${meaning.id})">🗑️ Delete</button>
+                    </div>
+                  </div>
+                  <div class="meaning-word">${meaning.word}</div>
+                  <div class="meaning-definition">${meaning.definition}</div>
+                </div>
+              `).join('')}
             </div>
           </div>
-          <div class="meaning-word">${meaning.word}</div>
-          <div class="meaning-definition">${meaning.definition}</div>
-        </div>
-      `).join('');
+        `;
+      });
+      
+      container.innerHTML = html;
     }
     
     function switchTab(tab) {
