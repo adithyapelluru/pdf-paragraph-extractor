@@ -290,14 +290,12 @@
       line-height: 1.6;
       white-space: pre-wrap;
       word-wrap: break-word;
-      background: white;
+      background: #f8f9ff;
       overflow-y: auto;
       scroll-behavior: smooth;
       resize: vertical;
-    }
-    
-    .notes-display.editable {
-      cursor: text;
+      cursor: default;
+      user-select: text;
     }
     
     .notes-display:empty:before {
@@ -313,7 +311,7 @@
       border-radius: 10px;
       padding: 15px;
       box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-      z-index: 10001;
+      z-index: 10002;
       max-width: 350px;
       min-width: 250px;
       display: none;
@@ -427,6 +425,35 @@
       color: #666;
       font-size: 14px;
       margin-bottom: 10px;
+      transition: all 0.3s;
+    }
+    
+    .definition-phonetic[style*="cursor: pointer"] {
+      color: #667eea;
+      font-weight: bold;
+    }
+    
+    .definition-phonetic[style*="cursor: pointer"]:hover {
+      color: #764ba2;
+      transform: scale(1.05);
+    }
+    
+    .definition-phonetic[style*="cursor: pointer"]:active {
+      transform: scale(0.95);
+    }
+    
+    /* Double-tap feedback animation */
+    @keyframes tap-feedback {
+      0% {
+        background: rgba(102, 126, 234, 0.2);
+      }
+      100% {
+        background: transparent;
+      }
+    }
+    
+    .tap-feedback {
+      animation: tap-feedback 0.3s ease;
     }
     
     .notes-resize-handle {
@@ -649,6 +676,8 @@
       background: #f8f9ff;
       outline: none;
       resize: none;
+      cursor: default;
+      user-select: text;
     }
     
     .fullscreen-notes:empty:before {
@@ -1315,15 +1344,28 @@
     <div class="fullscreen-content">
       <div 
         class="fullscreen-notes" 
-        contenteditable="true"
+        contenteditable="false"
         data-placeholder="Add your notes here..."
         id="fullscreenNotesContent"
-        oninput="handleFullscreenNoteChange()"
       ></div>
+    </div>
+    
+    <!-- Definition Popup inside fullscreen modal -->
+    <div class="definition-popup" id="definitionPopupFullscreen">
+      <div class="definition-header">
+        <span class="definition-word" id="definitionWordFullscreen"></span>
+        <button class="definition-close" onclick="closeDefinitionPopup()">✕</button>
+      </div>
+      <div class="definition-content" id="definitionContentFullscreen">
+        <div class="definition-loading">
+          <div class="definition-spinner"></div>
+          <div>Loading definition...</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Definition Popup -->
+  <!-- Definition Popup for regular notes -->
   <div class="definition-popup" id="definitionPopup">
     <div class="definition-header">
       <span class="definition-word" id="definitionWord"></span>
@@ -1854,12 +1896,11 @@
                 >
               </div>
               <div 
-                class="notes-display editable" 
-                contenteditable="true"
+                class="notes-display" 
+                contenteditable="false"
                 data-placeholder="Add your notes for this page..."
                 data-page-key="${pageKey}"
                 data-page-num="${page.pageNum}"
-                oninput="handleNoteChange('${pageKey}', ${page.pageNum})"
               >${savedNote}</div>
               <div class="notes-resize-handle" data-page-key="${pageKey}">
                 ⋮⋮⋮ Drag to resize
@@ -1927,25 +1968,7 @@
       }
     }
     
-    let noteTimeout;
-    function handleNoteChange(pageKey, pageNum) {
-      const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
-      const savedIndicator = document.getElementById(`saved-${pageNum}`);
-      
-      clearTimeout(noteTimeout);
-      savedIndicator.classList.remove('show');
-      
-      noteTimeout = setTimeout(async () => {
-        const note = notesDiv.textContent;
-        pageNotes[pageKey] = note;
-        await savePageNote(pageKey, note);
-        
-        savedIndicator.classList.add('show');
-        setTimeout(() => {
-          savedIndicator.classList.remove('show');
-        }, 2000);
-      }, 500);
-    }
+    // Notes are now read-only, no need for handleNoteChange function
     
     // Text-to-Speech functionality
     let currentSpeech = null;
@@ -2838,34 +2861,217 @@
     
     // Definition Popup Functionality
     let definitionPopup = null;
+    let definitionPopupFullscreen = null;
     let currentSelectedWord = '';
+    
+    // Double-tap detection for mobile
+    let lastTapTime = 0;
+    let lastTapTarget = null;
+    const DOUBLE_TAP_DELAY = 300; // milliseconds
     
     function initDefinitionPopup() {
       definitionPopup = document.getElementById('definitionPopup');
+      definitionPopupFullscreen = document.getElementById('definitionPopupFullscreen');
+      
+      if (!definitionPopup || !definitionPopupFullscreen) {
+        console.error('Definition popup elements not found');
+        return;
+      }
+      
+      console.log('Definition popups initialized');
       
       // Add selection listener to all notes displays
-      document.addEventListener('mouseup', handleTextSelection);
-      document.addEventListener('touchend', handleTextSelection);
+      document.addEventListener('mouseup', handleTextSelection, true);
+      document.addEventListener('touchend', handleTextSelection, true);
+      
+      // Add double-tap listener for mobile
+      document.addEventListener('touchend', handleDoubleTap, true);
       
       // Close popup when clicking outside
       document.addEventListener('click', (e) => {
-        if (definitionPopup && !definitionPopup.contains(e.target) && 
-            !e.target.closest('.notes-display') && 
-            !e.target.closest('.fullscreen-notes')) {
+        const clickedPopup = e.target.closest('.definition-popup');
+        const clickedNotes = e.target.closest('.notes-display') || e.target.closest('.fullscreen-notes');
+        
+        if (!clickedPopup && !clickedNotes) {
           closeDefinitionPopup();
         }
       });
+      
+      console.log('Definition popup event listeners attached');
+    }
+    
+    function handleDoubleTap(e) {
+      const currentTime = new Date().getTime();
+      const tapDelay = currentTime - lastTapTime;
+      
+      // Check if this is within notes area
+      const target = e.target;
+      const isNotesArea = target.classList?.contains('notes-display') || 
+                          target.classList?.contains('fullscreen-notes') ||
+                          target.closest('.notes-display') || 
+                          target.closest('.fullscreen-notes');
+      
+      if (!isNotesArea) {
+        lastTapTime = currentTime;
+        return;
+      }
+      
+      // Check if it's a double-tap on the same element
+      if (tapDelay < DOUBLE_TAP_DELAY && tapDelay > 0 && lastTapTarget === target) {
+        console.log('Double-tap detected');
+        
+        // Prevent default behavior
+        e.preventDefault();
+        
+        // Add visual feedback
+        const notesElement = target.closest('.notes-display') || target.closest('.fullscreen-notes');
+        if (notesElement) {
+          notesElement.classList.add('tap-feedback');
+          setTimeout(() => {
+            notesElement.classList.remove('tap-feedback');
+          }, 300);
+        }
+        
+        // Get the word at tap position
+        const touch = e.changedTouches[0];
+        const word = getWordAtPoint(touch.clientX, touch.clientY);
+        
+        if (word && word.length >= 2) {
+          console.log('Word from double-tap:', word);
+          
+          // Create a fake rect for the tapped position
+          const rect = {
+            left: touch.clientX - 50,
+            right: touch.clientX + 50,
+            top: touch.clientY - 20,
+            bottom: touch.clientY + 20,
+            width: 100,
+            height: 40
+          };
+          
+          showDefinitionPopup(word, rect);
+        }
+        
+        // Reset tap tracking
+        lastTapTime = 0;
+        lastTapTarget = null;
+      } else {
+        // Record this tap
+        lastTapTime = currentTime;
+        lastTapTarget = target;
+      }
+    }
+    
+    function getWordAtPoint(x, y) {
+      // Get the element at the point
+      const element = document.elementFromPoint(x, y);
+      if (!element) return null;
+      
+      // Check if it's in notes area
+      const isNotesArea = element.classList?.contains('notes-display') || 
+                          element.classList?.contains('fullscreen-notes') ||
+                          element.closest('.notes-display') || 
+                          element.closest('.fullscreen-notes');
+      
+      if (!isNotesArea) return null;
+      
+      // Try to get text node at position
+      let range, textNode, offset;
+      
+      if (document.caretPositionFromPoint) {
+        // Standard
+        range = document.caretPositionFromPoint(x, y);
+        if (range) {
+          textNode = range.offsetNode;
+          offset = range.offset;
+        }
+      } else if (document.caretRangeFromPoint) {
+        // WebKit
+        range = document.caretRangeFromPoint(x, y);
+        if (range) {
+          textNode = range.startContainer;
+          offset = range.startOffset;
+        }
+      }
+      
+      if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+        // Fallback: try to get text from element
+        const text = element.textContent || '';
+        const words = text.split(/\s+/);
+        if (words.length > 0) {
+          // Return first word as fallback
+          return words[0].replace(/[^\w\s'-]/g, '').toLowerCase();
+        }
+        return null;
+      }
+      
+      // Get the full text
+      const text = textNode.textContent;
+      
+      // Find word boundaries around the offset
+      let start = offset;
+      let end = offset;
+      
+      // Move start backward to word boundary
+      while (start > 0 && /[\w'-]/.test(text[start - 1])) {
+        start--;
+      }
+      
+      // Move end forward to word boundary
+      while (end < text.length && /[\w'-]/.test(text[end])) {
+        end++;
+      }
+      
+      // Extract the word
+      const word = text.substring(start, end).trim();
+      
+      // Clean and return
+      return word.replace(/[^\w\s'-]/g, '').toLowerCase();
     }
     
     function handleTextSelection(e) {
       const selection = window.getSelection();
       const selectedText = selection.toString().trim();
       
-      // Check if selection is within notes area
-      const target = e.target;
-      const isNotesArea = target.closest('.notes-display') || target.closest('.fullscreen-notes');
+      console.log('Text selection event:', {
+        selectedText,
+        target: e.target?.className,
+        anchorNode: selection.anchorNode
+      });
       
-      if (!isNotesArea || !selectedText || selectedText.length === 0) {
+      if (!selectedText || selectedText.length === 0) {
+        return;
+      }
+      
+      // Check if selection is within notes area
+      // Check both the event target and the selection's anchor node
+      let isNotesArea = false;
+      
+      if (e.target) {
+        const target = e.target;
+        isNotesArea = target.classList?.contains('notes-display') || 
+                      target.classList?.contains('fullscreen-notes') ||
+                      target.closest('.notes-display') || 
+                      target.closest('.fullscreen-notes');
+      }
+      
+      // Also check the selection's anchor node
+      if (!isNotesArea && selection.anchorNode) {
+        const anchorElement = selection.anchorNode.nodeType === Node.TEXT_NODE 
+          ? selection.anchorNode.parentElement 
+          : selection.anchorNode;
+        
+        if (anchorElement) {
+          isNotesArea = anchorElement.classList?.contains('notes-display') || 
+                        anchorElement.classList?.contains('fullscreen-notes') ||
+                        anchorElement.closest('.notes-display') || 
+                        anchorElement.closest('.fullscreen-notes');
+        }
+      }
+      
+      console.log('Is notes area:', isNotesArea);
+      
+      if (!isNotesArea) {
         return;
       }
       
@@ -2883,6 +3089,10 @@
       }
       
       // Get selection position
+      if (selection.rangeCount === 0) {
+        return;
+      }
+      
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
@@ -2891,9 +3101,23 @@
     }
     
     function showDefinitionPopup(word, rect) {
-      if (!definitionPopup) return;
-      
       currentSelectedWord = word;
+      
+      // Check if we're in fullscreen mode
+      const fullscreenModal = document.getElementById('fullscreenModal');
+      const isFullscreen = fullscreenModal && fullscreenModal.classList.contains('show');
+      
+      // Choose the correct popup
+      const activePopup = isFullscreen ? definitionPopupFullscreen : definitionPopup;
+      const wordElement = isFullscreen ? document.getElementById('definitionWordFullscreen') : document.getElementById('definitionWord');
+      const contentElement = isFullscreen ? document.getElementById('definitionContentFullscreen') : document.getElementById('definitionContent');
+      
+      if (!activePopup) {
+        console.error('Active popup not found');
+        return;
+      }
+      
+      console.log('Showing definition popup:', { word, isFullscreen });
       
       // Position popup
       const popupWidth = 350;
@@ -2913,27 +3137,29 @@
         top = rect.bottom + 10;
       }
       
-      definitionPopup.style.left = left + 'px';
-      definitionPopup.style.top = (top + window.scrollY) + 'px';
+      // Always use fixed positioning
+      activePopup.style.position = 'fixed';
+      activePopup.style.left = left + 'px';
+      activePopup.style.top = top + 'px';
       
       // Update word in header
-      document.getElementById('definitionWord').textContent = word;
+      wordElement.textContent = word;
       
       // Show loading state
-      document.getElementById('definitionContent').innerHTML = `
+      contentElement.innerHTML = `
         <div class="definition-loading">
           <div class="definition-spinner"></div>
           <div>Loading definition...</div>
         </div>
       `;
       
-      definitionPopup.classList.add('show');
+      activePopup.classList.add('show');
       
       // Fetch definition
-      fetchDefinition(word);
+      fetchDefinition(word, isFullscreen);
     }
     
-    async function fetchDefinition(word) {
+    async function fetchDefinition(word, isFullscreen = false) {
       try {
         // Using Free Dictionary API
         const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
@@ -2943,20 +3169,36 @@
         }
         
         const data = await response.json();
-        displayDefinition(data[0]);
+        displayDefinition(data[0], isFullscreen);
       } catch (error) {
-        displayDefinitionError(error.message);
+        displayDefinitionError(error.message, isFullscreen);
       }
     }
     
-    function displayDefinition(data) {
-      const contentDiv = document.getElementById('definitionContent');
+    function displayDefinition(data, isFullscreen = false) {
+      const contentDiv = isFullscreen ? document.getElementById('definitionContentFullscreen') : document.getElementById('definitionContent');
       
       let html = '';
       
+      // Find audio URL
+      let audioUrl = null;
+      if (data.phonetics && data.phonetics.length > 0) {
+        for (const phonetic of data.phonetics) {
+          if (phonetic.audio) {
+            audioUrl = phonetic.audio;
+            break;
+          }
+        }
+      }
+      
       // Add phonetic if available
-      if (data.phonetic) {
-        html += `<div class="definition-phonetic">🔊 ${data.phonetic}</div>`;
+      if (data.phonetic || audioUrl) {
+        const phoneticText = data.phonetic || '';
+        if (audioUrl) {
+          html += `<div class="definition-phonetic" style="cursor: pointer;" onclick="playDefinitionAudio('${audioUrl.replace(/'/g, "\\'")}', event)" title="Click to hear pronunciation">🔊 ${phoneticText}</div>`;
+        } else {
+          html += `<div class="definition-phonetic">🔊 ${phoneticText}</div>`;
+        }
       }
       
       // Add meanings
@@ -2988,8 +3230,8 @@
       contentDiv.innerHTML = html;
     }
     
-    function displayDefinitionError(message) {
-      const contentDiv = document.getElementById('definitionContent');
+    function displayDefinitionError(message, isFullscreen = false) {
+      const contentDiv = isFullscreen ? document.getElementById('definitionContentFullscreen') : document.getElementById('definitionContent');
       contentDiv.innerHTML = `
         <div class="definition-error">
           ❌ ${message === 'Word not found' ? 'No definition found for this word' : 'Failed to load definition'}
@@ -3001,6 +3243,39 @@
       if (definitionPopup) {
         definitionPopup.classList.remove('show');
       }
+      if (definitionPopupFullscreen) {
+        definitionPopupFullscreen.classList.remove('show');
+      }
+    }
+    
+    // Play pronunciation audio
+    let currentDefinitionAudio = null;
+    
+    function playDefinitionAudio(audioUrl, event) {
+      if (event) {
+        event.stopPropagation();
+      }
+      
+      console.log('Playing audio:', audioUrl);
+      
+      // Stop any currently playing audio
+      if (currentDefinitionAudio) {
+        currentDefinitionAudio.pause();
+        currentDefinitionAudio.currentTime = 0;
+      }
+      
+      // Create and play new audio
+      currentDefinitionAudio = new Audio(audioUrl);
+      
+      currentDefinitionAudio.onerror = (e) => {
+        console.error('Audio playback error:', e);
+        alert('Failed to play pronunciation audio');
+      };
+      
+      currentDefinitionAudio.play().catch(error => {
+        console.error('Audio play error:', error);
+        alert('Failed to play pronunciation audio');
+      });
     }
     
     // Initialize definition popup when page loads
@@ -3228,6 +3503,12 @@
       // Focus on content
       setTimeout(() => {
         fullscreenContent.focus();
+        
+        // Add direct event listeners to fullscreen notes
+        fullscreenContent.addEventListener('mouseup', handleTextSelection, true);
+        fullscreenContent.addEventListener('touchend', handleTextSelection, true);
+        
+        console.log('Fullscreen notes event listeners attached');
       }, 100);
       
       // Prevent body scroll
@@ -3239,6 +3520,9 @@
       const fullscreenContent = document.getElementById('fullscreenNotesContent');
       
       if (!modal || !fullscreenContent) return;
+      
+      // Close definition popup if open
+      closeDefinitionPopup();
       
       // Exit fullscreen mode
       if (document.fullscreenElement || document.webkitFullscreenElement || 
@@ -3254,23 +3538,7 @@
         }
       }
       
-      // Save content back to original notes
-      if (currentFullscreenPageKey && currentFullscreenPageNum) {
-        const notesDiv = document.querySelector(`[data-page-key="${currentFullscreenPageKey}"]`);
-        if (notesDiv) {
-          // If speech is active, preserve HTML structure
-          if (currentSpeakingPage === currentFullscreenPageNum && originalText) {
-            notesDiv.innerHTML = fullscreenContent.innerHTML;
-          } else {
-            notesDiv.textContent = fullscreenContent.textContent;
-          }
-          
-          // Trigger save (only if not currently speaking)
-          if (currentSpeakingPage !== currentFullscreenPageNum) {
-            handleNoteChange(currentFullscreenPageKey, currentFullscreenPageNum);
-          }
-        }
-      }
+      // Notes are read-only, no need to save changes
       
       // Hide modal
       modal.classList.remove('show');
@@ -3283,38 +3551,7 @@
       currentFullscreenPageNum = null;
     }
     
-    let fullscreenNoteTimeout;
-    function handleFullscreenNoteChange() {
-      if (!currentFullscreenPageKey || !currentFullscreenPageNum) return;
-      
-      const fullscreenContent = document.getElementById('fullscreenNotesContent');
-      const notesDiv = document.querySelector(`[data-page-key="${currentFullscreenPageKey}"]`);
-      
-      if (!fullscreenContent || !notesDiv) return;
-      
-      // Don't sync back if speech is active (to avoid breaking highlighting)
-      if (currentSpeakingPage !== currentFullscreenPageNum) {
-        // Update original notes in real-time
-        notesDiv.textContent = fullscreenContent.textContent;
-      }
-      
-      // Debounced save
-      clearTimeout(fullscreenNoteTimeout);
-      fullscreenNoteTimeout = setTimeout(async () => {
-        const note = fullscreenContent.textContent;
-        pageNotes[currentFullscreenPageKey] = note;
-        await savePageNote(currentFullscreenPageKey, note);
-        
-        // Show saved indicator on original notes
-        const savedIndicator = document.getElementById(`saved-${currentFullscreenPageNum}`);
-        if (savedIndicator) {
-          savedIndicator.classList.add('show');
-          setTimeout(() => {
-            savedIndicator.classList.remove('show');
-          }, 2000);
-        }
-      }, 500);
-    }
+    // Notes are now read-only, no need for handleFullscreenNoteChange function
     
     // Close fullscreen with Escape key
     document.addEventListener('keydown', (e) => {
