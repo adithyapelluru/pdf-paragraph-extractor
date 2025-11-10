@@ -313,7 +313,7 @@
       border-radius: 10px;
       padding: 15px;
       box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-      z-index: 10001;
+      z-index: 10002;
       max-width: 350px;
       min-width: 250px;
       display: none;
@@ -1321,9 +1321,23 @@
         oninput="handleFullscreenNoteChange()"
       ></div>
     </div>
+    
+    <!-- Definition Popup inside fullscreen modal -->
+    <div class="definition-popup" id="definitionPopupFullscreen">
+      <div class="definition-header">
+        <span class="definition-word" id="definitionWordFullscreen"></span>
+        <button class="definition-close" onclick="closeDefinitionPopup()">✕</button>
+      </div>
+      <div class="definition-content" id="definitionContentFullscreen">
+        <div class="definition-loading">
+          <div class="definition-spinner"></div>
+          <div>Loading definition...</div>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- Definition Popup -->
+  <!-- Definition Popup for regular notes -->
   <div class="definition-popup" id="definitionPopup">
     <div class="definition-header">
       <span class="definition-word" id="definitionWord"></span>
@@ -2838,34 +2852,80 @@
     
     // Definition Popup Functionality
     let definitionPopup = null;
+    let definitionPopupFullscreen = null;
     let currentSelectedWord = '';
     
     function initDefinitionPopup() {
       definitionPopup = document.getElementById('definitionPopup');
+      definitionPopupFullscreen = document.getElementById('definitionPopupFullscreen');
+      
+      if (!definitionPopup || !definitionPopupFullscreen) {
+        console.error('Definition popup elements not found');
+        return;
+      }
+      
+      console.log('Definition popups initialized');
       
       // Add selection listener to all notes displays
-      document.addEventListener('mouseup', handleTextSelection);
-      document.addEventListener('touchend', handleTextSelection);
+      document.addEventListener('mouseup', handleTextSelection, true);
+      document.addEventListener('touchend', handleTextSelection, true);
       
       // Close popup when clicking outside
       document.addEventListener('click', (e) => {
-        if (definitionPopup && !definitionPopup.contains(e.target) && 
-            !e.target.closest('.notes-display') && 
-            !e.target.closest('.fullscreen-notes')) {
+        const clickedPopup = e.target.closest('.definition-popup');
+        const clickedNotes = e.target.closest('.notes-display') || e.target.closest('.fullscreen-notes');
+        
+        if (!clickedPopup && !clickedNotes) {
           closeDefinitionPopup();
         }
       });
+      
+      console.log('Definition popup event listeners attached');
     }
     
     function handleTextSelection(e) {
       const selection = window.getSelection();
       const selectedText = selection.toString().trim();
       
-      // Check if selection is within notes area
-      const target = e.target;
-      const isNotesArea = target.closest('.notes-display') || target.closest('.fullscreen-notes');
+      console.log('Text selection event:', {
+        selectedText,
+        target: e.target?.className,
+        anchorNode: selection.anchorNode
+      });
       
-      if (!isNotesArea || !selectedText || selectedText.length === 0) {
+      if (!selectedText || selectedText.length === 0) {
+        return;
+      }
+      
+      // Check if selection is within notes area
+      // Check both the event target and the selection's anchor node
+      let isNotesArea = false;
+      
+      if (e.target) {
+        const target = e.target;
+        isNotesArea = target.classList?.contains('notes-display') || 
+                      target.classList?.contains('fullscreen-notes') ||
+                      target.closest('.notes-display') || 
+                      target.closest('.fullscreen-notes');
+      }
+      
+      // Also check the selection's anchor node
+      if (!isNotesArea && selection.anchorNode) {
+        const anchorElement = selection.anchorNode.nodeType === Node.TEXT_NODE 
+          ? selection.anchorNode.parentElement 
+          : selection.anchorNode;
+        
+        if (anchorElement) {
+          isNotesArea = anchorElement.classList?.contains('notes-display') || 
+                        anchorElement.classList?.contains('fullscreen-notes') ||
+                        anchorElement.closest('.notes-display') || 
+                        anchorElement.closest('.fullscreen-notes');
+        }
+      }
+      
+      console.log('Is notes area:', isNotesArea);
+      
+      if (!isNotesArea) {
         return;
       }
       
@@ -2883,6 +2943,10 @@
       }
       
       // Get selection position
+      if (selection.rangeCount === 0) {
+        return;
+      }
+      
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
@@ -2891,9 +2955,23 @@
     }
     
     function showDefinitionPopup(word, rect) {
-      if (!definitionPopup) return;
-      
       currentSelectedWord = word;
+      
+      // Check if we're in fullscreen mode
+      const fullscreenModal = document.getElementById('fullscreenModal');
+      const isFullscreen = fullscreenModal && fullscreenModal.classList.contains('show');
+      
+      // Choose the correct popup
+      const activePopup = isFullscreen ? definitionPopupFullscreen : definitionPopup;
+      const wordElement = isFullscreen ? document.getElementById('definitionWordFullscreen') : document.getElementById('definitionWord');
+      const contentElement = isFullscreen ? document.getElementById('definitionContentFullscreen') : document.getElementById('definitionContent');
+      
+      if (!activePopup) {
+        console.error('Active popup not found');
+        return;
+      }
+      
+      console.log('Showing definition popup:', { word, isFullscreen });
       
       // Position popup
       const popupWidth = 350;
@@ -2913,27 +2991,29 @@
         top = rect.bottom + 10;
       }
       
-      definitionPopup.style.left = left + 'px';
-      definitionPopup.style.top = (top + window.scrollY) + 'px';
+      // Always use fixed positioning
+      activePopup.style.position = 'fixed';
+      activePopup.style.left = left + 'px';
+      activePopup.style.top = top + 'px';
       
       // Update word in header
-      document.getElementById('definitionWord').textContent = word;
+      wordElement.textContent = word;
       
       // Show loading state
-      document.getElementById('definitionContent').innerHTML = `
+      contentElement.innerHTML = `
         <div class="definition-loading">
           <div class="definition-spinner"></div>
           <div>Loading definition...</div>
         </div>
       `;
       
-      definitionPopup.classList.add('show');
+      activePopup.classList.add('show');
       
       // Fetch definition
-      fetchDefinition(word);
+      fetchDefinition(word, isFullscreen);
     }
     
-    async function fetchDefinition(word) {
+    async function fetchDefinition(word, isFullscreen = false) {
       try {
         // Using Free Dictionary API
         const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
@@ -2943,14 +3023,14 @@
         }
         
         const data = await response.json();
-        displayDefinition(data[0]);
+        displayDefinition(data[0], isFullscreen);
       } catch (error) {
-        displayDefinitionError(error.message);
+        displayDefinitionError(error.message, isFullscreen);
       }
     }
     
-    function displayDefinition(data) {
-      const contentDiv = document.getElementById('definitionContent');
+    function displayDefinition(data, isFullscreen = false) {
+      const contentDiv = isFullscreen ? document.getElementById('definitionContentFullscreen') : document.getElementById('definitionContent');
       
       let html = '';
       
@@ -2988,8 +3068,8 @@
       contentDiv.innerHTML = html;
     }
     
-    function displayDefinitionError(message) {
-      const contentDiv = document.getElementById('definitionContent');
+    function displayDefinitionError(message, isFullscreen = false) {
+      const contentDiv = isFullscreen ? document.getElementById('definitionContentFullscreen') : document.getElementById('definitionContent');
       contentDiv.innerHTML = `
         <div class="definition-error">
           ❌ ${message === 'Word not found' ? 'No definition found for this word' : 'Failed to load definition'}
@@ -3000,6 +3080,9 @@
     function closeDefinitionPopup() {
       if (definitionPopup) {
         definitionPopup.classList.remove('show');
+      }
+      if (definitionPopupFullscreen) {
+        definitionPopupFullscreen.classList.remove('show');
       }
     }
     
@@ -3228,6 +3311,12 @@
       // Focus on content
       setTimeout(() => {
         fullscreenContent.focus();
+        
+        // Add direct event listeners to fullscreen notes
+        fullscreenContent.addEventListener('mouseup', handleTextSelection, true);
+        fullscreenContent.addEventListener('touchend', handleTextSelection, true);
+        
+        console.log('Fullscreen notes event listeners attached');
       }, 100);
       
       // Prevent body scroll
@@ -3239,6 +3328,9 @@
       const fullscreenContent = document.getElementById('fullscreenNotesContent');
       
       if (!modal || !fullscreenContent) return;
+      
+      // Close definition popup if open
+      closeDefinitionPopup();
       
       // Exit fullscreen mode
       if (document.fullscreenElement || document.webkitFullscreenElement || 
