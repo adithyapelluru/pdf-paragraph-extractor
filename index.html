@@ -6,6 +6,32 @@
   <meta http-equiv="refresh" content="0; url=upload.html">
   <title>PDF Paragraph Extractor - Redirecting...</title> 
   <style>
+    :root {
+      --bg-gradient-start: #667eea;
+      --bg-gradient-end: #764ba2;
+      --container-bg: white;
+      --text-color: #333;
+      --text-secondary: #666;
+      --border-color: #ddd;
+      --section-bg: #f8f9ff;
+      --section-hover: #f0f2ff;
+      --section-active: #e8ebff;
+      --shadow-color: rgba(0,0,0,0.3);
+    }
+    
+    [data-theme="dark"] {
+      --bg-gradient-start: #000000;
+      --bg-gradient-end: #000000;
+      --container-bg: #000000;
+      --text-color: #e0e0e0;
+      --text-secondary: #b0b0b0;
+      --border-color: #1a1a1a;
+      --section-bg: #000000;
+      --section-hover: #0a0a0a;
+      --section-active: #151515;
+      --shadow-color: rgba(0,0,0,0.9);
+    }
+    
     * {
       margin: 0;
       padding: 0;
@@ -14,21 +40,23 @@
     
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
       min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
       padding: 20px;
+      transition: background 0.3s ease;
     }
     
     .container {
-      background: white;
+      background: var(--container-bg);
       border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      box-shadow: 0 20px 60px var(--shadow-color);
       max-width: 1200px;
       width: 100%;
       overflow: hidden;
+      transition: background 0.3s ease;
     }
     
     .header {
@@ -36,6 +64,12 @@
       color: white;
       padding: 30px;
       text-align: center;
+      transition: background 0.3s ease;
+    }
+    
+    [data-theme="dark"] .header {
+      background: #000000;
+      border-bottom: 2px solid #1a1a1a;
     }
     
     .header h1 {
@@ -57,18 +91,18 @@
       border: 3px dashed #667eea;
       border-radius: 15px;
       padding: 60px 40px;
-      background: #f8f9ff;
+      background: var(--section-bg);
       cursor: pointer;
       transition: all 0.3s;
     }
     
     .upload-box:hover {
-      background: #f0f2ff;
+      background: var(--section-hover);
       border-color: #764ba2;
     }
     
     .upload-box.dragover {
-      background: #e8ebff;
+      background: var(--section-active);
       border-color: #764ba2;
       transform: scale(1.02);
     }
@@ -80,13 +114,15 @@
     
     .upload-text {
       font-size: 20px;
-      color: #333;
+      color: var(--text-color);
       margin-bottom: 10px;
+      transition: color 0.3s ease;
     }
     
     .upload-hint {
-      color: #666;
+      color: var(--text-secondary);
       font-size: 14px;
+      transition: color 0.3s ease;
     }
     
     .file-input {
@@ -105,9 +141,19 @@
       transition: transform 0.2s;
     }
     
+    [data-theme="dark"] .btn {
+      background: #000000;
+      border: 2px solid #1a1a1a;
+    }
+    
     .btn:hover {
       transform: translateY(-2px);
       box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    [data-theme="dark"] .btn:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .results {
@@ -120,20 +166,23 @@
     }
     
     .file-info {
-      background: #f8f9ff;
+      background: var(--section-bg);
       padding: 20px;
       border-radius: 10px;
       margin-bottom: 30px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      color: var(--text-color);
+      transition: background 0.3s ease, color 0.3s ease;
     }
     
     .page-section {
       margin-bottom: 30px;
-      background: #f8f9ff;
+      background: var(--section-bg);
       padding: 20px;
       border-radius: 15px;
+      transition: background 0.3s ease;
     }
     
     .page-header {
@@ -169,6 +218,11 @@
       gap: 8px;
     }
     
+    [data-theme="dark"] .paragraph-item {
+      background: #000000;
+      border: 2px solid #1a1a1a;
+    }
+    
     .paragraph-item:hover {
       transform: translateY(-5px);
       box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
@@ -178,8 +232,18 @@
       background: #FF9800;
     }
     
+    [data-theme="dark"] .paragraph-item.selected {
+      background: #000000;
+      border-color: #1a1a1a;
+    }
+    
     .paragraph-item.copied {
       background: #4CAF50;
+    }
+    
+    [data-theme="dark"] .paragraph-item.copied {
+      background: #000000;
+      border-color: #1a1a1a;
     }
     
     .para-checkbox {
@@ -211,8 +275,18 @@
       transition: all 0.3s;
     }
     
+    [data-theme="dark"] .page-btn {
+      background: #000000;
+      border: 2px solid #1a1a1a;
+    }
+    
     .page-btn:hover {
       background: #764ba2;
+    }
+    
+    [data-theme="dark"] .page-btn:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .page-btn:disabled {
@@ -220,12 +294,19 @@
       cursor: not-allowed;
     }
     
+    [data-theme="dark"] .page-btn:disabled {
+      background: #000000;
+      border-color: #1a1a1a;
+      color: #666;
+    }
+    
     .page-notes {
       margin-top: 15px;
       padding: 15px;
-      background: white;
+      background: var(--container-bg);
       border-radius: 10px;
       border: 2px solid #667eea;
+      transition: background 0.3s ease;
     }
     
     .notes-header {
@@ -263,16 +344,18 @@
       width: 100%;
       height: 120px;
       padding: 10px;
-      border: 1px solid #ddd;
+      border: 1px solid var(--border-color);
       border-radius: 8px;
       font-family: inherit;
       font-size: 14px;
       line-height: 1.6;
       white-space: pre-wrap;
       word-wrap: break-word;
-      background: white;
+      background: var(--section-bg);
       overflow-y: auto;
       scroll-behavior: smooth;
+      color: var(--text-color);
+      transition: background 0.3s ease, color 0.3s ease;
     }
     
     .notes-display.editable {
@@ -329,9 +412,19 @@
       gap: 5px;
     }
     
+    [data-theme="dark"] .notes-btn {
+      background: #000000;
+      border: 2px solid #1a1a1a;
+    }
+    
     .notes-btn:hover {
       background: #764ba2;
       transform: translateY(-1px);
+    }
+    
+    [data-theme="dark"] .notes-btn:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .notes-btn:disabled {
@@ -340,9 +433,20 @@
       transform: none;
     }
     
+    [data-theme="dark"] .notes-btn:disabled {
+      background: #000000;
+      border-color: #1a1a1a;
+      color: #666;
+    }
+    
     .notes-btn.speaking {
       background: #FF9800;
       animation: pulse 1.5s infinite;
+    }
+    
+    [data-theme="dark"] .notes-btn.speaking {
+      background: #000000;
+      border-color: #1a1a1a;
     }
     
     @keyframes pulse {
@@ -356,8 +460,9 @@
       gap: 8px;
       margin-top: 8px;
       padding: 8px;
-      background: #f0f2ff;
+      background: var(--section-hover);
       border-radius: 8px;
+      transition: background 0.3s ease;
     }
     
     .speed-label {
@@ -430,9 +535,19 @@
       z-index: 1000;
     }
     
+    [data-theme="dark"] .floating-btn {
+      background: #000000;
+      border: 2px solid #1a1a1a;
+    }
+    
     .floating-btn:hover {
       transform: translateY(-3px);
       box-shadow: 0 8px 25px rgba(76, 175, 80, 0.5);
+    }
+    
+    [data-theme="dark"] .floating-btn:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .back-btn {
@@ -599,6 +714,52 @@
         font-size: 12px;
       }
     }
+    
+    .theme-toggle-btn {
+      position: fixed;
+      top: 30px;
+      right: 30px;
+      background: #667eea;
+      color: white;
+      border: none;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 24px;
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+      transition: all 0.3s;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .theme-toggle-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+      background: #764ba2;
+    }
+    
+    @media (max-width: 768px) {
+      .theme-toggle-btn {
+        top: 15px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+        font-size: 20px;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .theme-toggle-btn {
+        top: 10px;
+        right: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -638,6 +799,10 @@
   
   <button class="floating-btn" id="copyAllBtn" style="display: none;" onclick="copyAll()">
     📋 Copy All
+  </button>
+  
+  <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark mode" id="themeToggle">
+    🌙
   </button>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -1382,6 +1547,35 @@
       fileInput.value = '';
       allParagraphs = [];
     }
+    
+    // Theme toggle functionality
+    function toggleTheme() {
+      const html = document.documentElement;
+      const currentTheme = html.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      const themeToggle = document.getElementById('themeToggle');
+      
+      html.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+      
+      // Update button icon
+      themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+    }
+    
+    // Load saved theme on page load
+    function loadTheme() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      const html = document.documentElement;
+      const themeToggle = document.getElementById('themeToggle');
+      
+      html.setAttribute('data-theme', savedTheme);
+      if (themeToggle) {
+        themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+      }
+    }
+    
+    // Initialize theme on load
+    loadTheme();
   </script>
 </body>
 </html>

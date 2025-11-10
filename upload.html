@@ -5,6 +5,32 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>File Manager - PDF & EPUB Extractor</title>
   <style>
+    :root {
+      --bg-gradient-start: #667eea;
+      --bg-gradient-end: #764ba2;
+      --container-bg: white;
+      --text-color: #333;
+      --text-secondary: #666;
+      --border-color: #ddd;
+      --section-bg: #f8f9ff;
+      --section-hover: #f0f2ff;
+      --section-active: #e8ebff;
+      --shadow-color: rgba(0,0,0,0.3);
+    }
+    
+    [data-theme="dark"] {
+      --bg-gradient-start: #000000;
+      --bg-gradient-end: #000000;
+      --container-bg: #000000;
+      --text-color: #e0e0e0;
+      --text-secondary: #b0b0b0;
+      --border-color: #1a1a1a;
+      --section-bg: #000000;
+      --section-hover: #0a0a0a;
+      --section-active: #151515;
+      --shadow-color: rgba(0,0,0,0.9);
+    }
+    
     * {
       margin: 0;
       padding: 0;
@@ -13,18 +39,20 @@
     
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
       min-height: 100vh;
       padding: 20px;
+      transition: background 0.3s ease;
     }
     
     .container {
       max-width: 1000px;
       margin: 0 auto;
-      background: white;
+      background: var(--container-bg);
       border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      box-shadow: 0 20px 60px var(--shadow-color);
       overflow: hidden;
+      transition: background 0.3s ease;
     }
     
     .header {
@@ -32,6 +60,12 @@
       color: white;
       padding: 30px;
       text-align: center;
+      transition: background 0.3s ease;
+    }
+    
+    [data-theme="dark"] .header {
+      background: #000000;
+      border-bottom: 2px solid #1a1a1a;
     }
     
     .header h1 {
@@ -53,19 +87,19 @@
       border-radius: 15px;
       padding: 40px;
       text-align: center;
-      background: #f8f9ff;
+      background: var(--section-bg);
       margin-bottom: 30px;
       cursor: pointer;
       transition: all 0.3s;
     }
     
     .upload-section:hover {
-      background: #f0f2ff;
+      background: var(--section-hover);
       border-color: #764ba2;
     }
     
     .upload-section.dragover {
-      background: #e8ebff;
+      background: var(--section-active);
       border-color: #764ba2;
       transform: scale(1.02);
     }
@@ -91,9 +125,19 @@
       transition: transform 0.2s;
     }
     
+    [data-theme="dark"] .btn {
+      background: #000000;
+      border: 2px solid #1a1a1a;
+    }
+    
     .btn:hover {
       transform: translateY(-2px);
       box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    [data-theme="dark"] .btn:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .files-section {
@@ -102,10 +146,11 @@
     
     .section-title {
       font-size: 24px;
-      color: #333;
+      color: var(--text-color);
       margin-bottom: 20px;
       padding-bottom: 10px;
       border-bottom: 2px solid #667eea;
+      transition: color 0.3s ease;
     }
     
     .file-list {
@@ -114,7 +159,7 @@
     }
     
     .file-item {
-      background: #f8f9ff;
+      background: var(--section-bg);
       padding: 20px;
       border-radius: 10px;
       display: flex;
@@ -125,7 +170,7 @@
     }
     
     .file-item:hover {
-      background: #e8ebff;
+      background: var(--section-hover);
       transform: translateX(5px);
       box-shadow: 0 3px 10px rgba(0,0,0,0.1);
     }
@@ -151,15 +196,17 @@
     
     .file-name {
       font-weight: bold;
-      color: #333;
+      color: var(--text-color);
       margin-bottom: 5px;
       word-break: break-word;
       overflow-wrap: break-word;
+      transition: color 0.3s ease;
     }
     
     .file-meta {
       font-size: 14px;
-      color: #666;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
     }
     
     .file-actions {
@@ -178,22 +225,43 @@
       transition: all 0.3s;
     }
     
+    [data-theme="dark"] .action-btn {
+      background: #000000;
+      border: 2px solid #1a1a1a;
+    }
+    
     .action-btn:hover {
       background: #764ba2;
+    }
+    
+    [data-theme="dark"] .action-btn:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .action-btn.delete {
       background: #f44336;
     }
     
+    [data-theme="dark"] .action-btn.delete {
+      background: #000000;
+      border-color: #1a1a1a;
+    }
+    
     .action-btn.delete:hover {
       background: #d32f2f;
+    }
+    
+    [data-theme="dark"] .action-btn.delete:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .empty-state {
       text-align: center;
       padding: 40px;
-      color: #666;
+      color: var(--text-secondary);
+      transition: color 0.3s ease;
     }
     
     .empty-state-icon {
@@ -205,9 +273,10 @@
     .sync-section {
       margin-top: 30px;
       padding: 20px;
-      background: #f8f9ff;
+      background: var(--section-bg);
       border-radius: 15px;
       border: 2px solid #667eea;
+      transition: background 0.3s ease;
     }
     
     .sync-title {
@@ -234,24 +303,71 @@
       transition: all 0.3s;
     }
     
+    [data-theme="dark"] .sync-btn {
+      background: #000000;
+      border: 2px solid #1a1a1a;
+    }
+    
     .sync-btn:hover {
       background: #764ba2;
       transform: translateY(-2px);
+    }
+    
+    [data-theme="dark"] .sync-btn:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .sync-btn.export {
       background: #4CAF50;
     }
     
+    [data-theme="dark"] .sync-btn.export {
+      background: #000000;
+      border-color: #1a1a1a;
+    }
+    
     .sync-btn.export:hover {
       background: #45a049;
+    }
+    
+    [data-theme="dark"] .sync-btn.export:hover {
+      background: #0a0a0a;
+      border-color: #1a1a1a;
     }
     
     .sync-info {
       margin-top: 10px;
       font-size: 13px;
-      color: #666;
+      color: var(--text-secondary);
       line-height: 1.5;
+      transition: color 0.3s ease;
+    }
+    
+    .theme-toggle-btn {
+      position: fixed;
+      top: 30px;
+      right: 30px;
+      background: #667eea;
+      color: white;
+      border: none;
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 24px;
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+      transition: all 0.3s;
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .theme-toggle-btn:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+      background: #764ba2;
     }
     
     /* Mobile Responsive */
@@ -323,6 +439,14 @@
       .sync-btn {
         width: 100%;
       }
+      
+      .theme-toggle-btn {
+        top: 15px;
+        right: 15px;
+        width: 45px;
+        height: 45px;
+        font-size: 20px;
+      }
     }
     
     @media (max-width: 480px) {
@@ -344,6 +468,14 @@
       
       .file-meta {
         font-size: 12px;
+      }
+      
+      .theme-toggle-btn {
+        top: 10px;
+        right: 10px;
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
       }
     }
   </style>
@@ -382,6 +514,10 @@
       </div>
     </div>
   </div>
+  
+  <button class="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark mode" id="themeToggle">
+    🌙
+  </button>
 
   <script>
     const uploadBox = document.getElementById('uploadBox');
@@ -717,6 +853,35 @@
       // Reset file input
       event.target.value = '';
     }
+    
+    // Theme toggle functionality
+    function toggleTheme() {
+      const html = document.documentElement;
+      const currentTheme = html.getAttribute('data-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+      const themeToggle = document.getElementById('themeToggle');
+      
+      html.setAttribute('data-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+      
+      // Update button icon
+      themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
+    }
+    
+    // Load saved theme on page load
+    function loadTheme() {
+      const savedTheme = localStorage.getItem('theme') || 'light';
+      const html = document.documentElement;
+      const themeToggle = document.getElementById('themeToggle');
+      
+      html.setAttribute('data-theme', savedTheme);
+      if (themeToggle) {
+        themeToggle.textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+      }
+    }
+    
+    // Initialize theme on load
+    loadTheme();
   </script>
 </body>
 </html>
