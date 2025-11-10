@@ -421,6 +421,116 @@
       margin-top: 5px;
     }
     
+    .definition-images {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 2px solid #e0e0e0;
+    }
+    
+    .definition-images-title {
+      font-weight: bold;
+      color: #667eea;
+      font-size: 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    
+    .definition-images-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    
+    .definition-image-item {
+      position: relative;
+      width: 100%;
+      padding-bottom: 100%;
+      overflow: hidden;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: transform 0.3s;
+      background: #f0f0f0;
+    }
+    
+    .definition-image-item:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    
+    .definition-image-item img {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
+    .definition-images-loading {
+      text-align: center;
+      padding: 10px;
+      color: #999;
+      font-size: 12px;
+    }
+    
+    /* Image fullscreen viewer */
+    .image-viewer-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 10003;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    
+    .image-viewer-modal.show {
+      display: flex;
+    }
+    
+    .image-viewer-content {
+      max-width: 90%;
+      max-height: 90%;
+      position: relative;
+    }
+    
+    .image-viewer-content img {
+      max-width: 100%;
+      max-height: 90vh;
+      object-fit: contain;
+      border-radius: 10px;
+    }
+    
+    .image-viewer-close {
+      position: absolute;
+      top: -40px;
+      right: 0;
+      background: white;
+      color: #333;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+    
+    .image-viewer-close:hover {
+      background: #f44336;
+      color: white;
+      transform: rotate(90deg);
+    }
+    
     .definition-phonetic {
       color: #666;
       font-size: 14px;
@@ -1051,7 +1161,21 @@
       }
       
       .definition-content {
-        max-height: 250px;
+        max-height: 300px;
+      }
+      
+      .definition-images-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      
+      .image-viewer-content {
+        max-width: 95%;
+        max-height: 95%;
+      }
+      
+      .image-viewer-close {
+        top: 10px;
+        right: 10px;
       }
       
       body {
@@ -1379,9 +1503,38 @@
     </div>
   </div>
 
+  <!-- Image Viewer Modal -->
+  <div class="image-viewer-modal" id="imageViewerModal" onclick="closeImageViewer()">
+    <div class="image-viewer-content" onclick="event.stopPropagation()">
+      <button class="image-viewer-close" onclick="closeImageViewer()">✕</button>
+      <img id="imageViewerImg" src="" alt="Full size image">
+    </div>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    
+    // ============================================
+    // API CONFIGURATION - IMPORTANT!
+    // ============================================
+    // 1. Get your FREE Merriam-Webster API key from: https://dictionaryapi.com/
+    // 2. Replace 'YOUR_API_KEY_HERE' below with your actual API key
+    // 3. Choose your dictionary type based on which API key you registered for
+    
+    const MERRIAM_WEBSTER_API_KEY = '26a3dfd8-3521-4794-9d0d-89225376adbc'; // ⚠️ Your API key
+    const MERRIAM_WEBSTER_DICTIONARY = 'sd3'; // Try 'sd3' (School Dictionary) or 'learners'
+    
+    // Available dictionaries (you need separate API keys for each):
+    // - 'collegiate': Merriam-Webster's Collegiate Dictionary (general use)
+    // - 'learners': Learner's Dictionary (for English learners) 
+    // - 'sd3': School Dictionary (Elementary Dictionary)
+    // - 'medical': Medical Dictionary
+    // - 'spanish': Spanish-English Dictionary
+    // 
+    // NOTE: Each dictionary requires its own API key registration!
+    // If you get 403 errors, your key might be for a different dictionary.
+    // ============================================
     
     let allParagraphs = [];
     let db;
@@ -3161,39 +3314,77 @@
     
     async function fetchDefinition(word, isFullscreen = false) {
       try {
-        // Using Free Dictionary API
-        const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+        // Check if API key is set
+        if (!MERRIAM_WEBSTER_API_KEY || MERRIAM_WEBSTER_API_KEY === 'YOUR_API_KEY_HERE') {
+          displayDefinitionError('⚠️ API key not configured. Please add your Merriam-Webster API key in the code.', isFullscreen);
+          return;
+        }
+        
+        // Using Merriam-Webster Dictionary API
+        const url = `https://dictionaryapi.com/api/v3/references/${MERRIAM_WEBSTER_DICTIONARY}/json/${encodeURIComponent(word)}?key=${MERRIAM_WEBSTER_API_KEY}`;
+        console.log('Fetching definition from:', url.replace(MERRIAM_WEBSTER_API_KEY, 'API_KEY_HIDDEN'));
+        
+        const response = await fetch(url);
+        
+        console.log('Response status:', response.status);
         
         if (!response.ok) {
-          throw new Error('Word not found');
+          if (response.status === 403) {
+            throw new Error('Invalid API key. Please check your Merriam-Webster API key.');
+          } else if (response.status === 404) {
+            throw new Error('Word not found in dictionary.');
+          } else {
+            throw new Error(`API error: ${response.status}`);
+          }
         }
         
         const data = await response.json();
-        displayDefinition(data[0], isFullscreen);
+        console.log('API response data:', data);
+        
+        // Check if we got suggestions instead of definitions
+        if (Array.isArray(data) && data.length > 0 && typeof data[0] === 'string') {
+          displayDefinitionError(`Did you mean: <strong>${data.slice(0, 5).join(', ')}</strong>?`, isFullscreen);
+          return;
+        }
+        
+        if (!data || data.length === 0) {
+          throw new Error('Word not found in dictionary.');
+        }
+        
+        displayMerriamWebsterDefinition(data[0], word, isFullscreen);
       } catch (error) {
+        console.error('Definition fetch error:', error);
         displayDefinitionError(error.message, isFullscreen);
       }
     }
     
-    function displayDefinition(data, isFullscreen = false) {
+    function displayMerriamWebsterDefinition(data, word, isFullscreen = false) {
       const contentDiv = isFullscreen ? document.getElementById('definitionContentFullscreen') : document.getElementById('definitionContent');
       
       let html = '';
       
-      // Find audio URL
+      // Get pronunciation
       let audioUrl = null;
-      if (data.phonetics && data.phonetics.length > 0) {
-        for (const phonetic of data.phonetics) {
-          if (phonetic.audio) {
-            audioUrl = phonetic.audio;
-            break;
-          }
+      let phoneticText = '';
+      
+      if (data.hwi && data.hwi.prs && data.hwi.prs.length > 0) {
+        const pr = data.hwi.prs[0];
+        if (pr.mw) {
+          phoneticText = pr.mw;
+        }
+        if (pr.sound && pr.sound.audio) {
+          // Merriam-Webster audio URL format
+          const audioFile = pr.sound.audio;
+          const subdir = audioFile.startsWith('bix') ? 'bix' :
+                        audioFile.startsWith('gg') ? 'gg' :
+                        audioFile.match(/^[0-9]/) ? 'number' :
+                        audioFile.charAt(0);
+          audioUrl = `https://media.merriam-webster.com/audio/prons/en/us/mp3/${subdir}/${audioFile}.mp3`;
         }
       }
       
       // Add phonetic if available
-      if (data.phonetic || audioUrl) {
-        const phoneticText = data.phonetic || '';
+      if (phoneticText || audioUrl) {
         if (audioUrl) {
           html += `<div class="definition-phonetic" style="cursor: pointer;" onclick="playDefinitionAudio('${audioUrl.replace(/'/g, "\\'")}', event)" title="Click to hear pronunciation">🔊 ${phoneticText}</div>`;
         } else {
@@ -3201,40 +3392,75 @@
         }
       }
       
+      // Get functional label (part of speech)
+      const partOfSpeech = data.fl || '';
+      
       // Add meanings
-      if (data.meanings && data.meanings.length > 0) {
-        data.meanings.forEach((meaning, index) => {
-          if (index < 3) { // Limit to 3 meanings to keep popup compact
-            html += `<div class="definition-meaning">`;
-            html += `<div class="definition-pos">${meaning.partOfSpeech}</div>`;
-            
-            if (meaning.definitions && meaning.definitions.length > 0) {
-              meaning.definitions.slice(0, 2).forEach((def, defIndex) => {
-                html += `<div class="definition-text">${defIndex + 1}. ${def.definition}</div>`;
-                
-                if (def.example) {
-                  html += `<div class="definition-example">"${def.example}"</div>`;
-                }
-              });
-            }
-            
-            html += `</div>`;
-          }
+      if (data.shortdef && data.shortdef.length > 0) {
+        html += `<div class="definition-meaning">`;
+        if (partOfSpeech) {
+          html += `<div class="definition-pos">${partOfSpeech}</div>`;
+        }
+        
+        data.shortdef.slice(0, 3).forEach((def, index) => {
+          html += `<div class="definition-text">${index + 1}. ${def}</div>`;
         });
+        
+        html += `</div>`;
+      } else if (data.def && data.def.length > 0) {
+        // Fallback to detailed definitions
+        html += `<div class="definition-meaning">`;
+        if (partOfSpeech) {
+          html += `<div class="definition-pos">${partOfSpeech}</div>`;
+        }
+        
+        const sseq = data.def[0].sseq;
+        if (sseq && sseq.length > 0) {
+          let defCount = 0;
+          for (const sense of sseq) {
+            if (defCount >= 3) break;
+            if (sense[0] && sense[0][1] && sense[0][1].dt) {
+              const dt = sense[0][1].dt;
+              for (const item of dt) {
+                if (item[0] === 'text') {
+                  const text = item[1].replace(/\{[^}]+\}/g, ''); // Remove markup
+                  html += `<div class="definition-text">${defCount + 1}. ${text}</div>`;
+                  defCount++;
+                  break;
+                }
+              }
+            }
+          }
+        }
+        
+        html += `</div>`;
       }
       
-      if (!html) {
+      // Add images section
+      html += `
+        <div class="definition-images">
+          <div class="definition-images-title">📷 Images</div>
+          <div class="definition-images-grid" id="definitionImagesGrid${isFullscreen ? 'Fullscreen' : ''}">
+            <div class="definition-images-loading">Loading images...</div>
+          </div>
+        </div>
+      `;
+      
+      if (!html || html.indexOf('definition-text') === -1) {
         html = '<div class="definition-error">No definition found</div>';
       }
       
       contentDiv.innerHTML = html;
+      
+      // Fetch images for the word
+      fetchWordImages(word, isFullscreen);
     }
     
     function displayDefinitionError(message, isFullscreen = false) {
       const contentDiv = isFullscreen ? document.getElementById('definitionContentFullscreen') : document.getElementById('definitionContent');
       contentDiv.innerHTML = `
         <div class="definition-error">
-          ❌ ${message === 'Word not found' ? 'No definition found for this word' : 'Failed to load definition'}
+          ${message}
         </div>
       `;
     }
@@ -3277,6 +3503,71 @@
         alert('Failed to play pronunciation audio');
       });
     }
+    
+    // Fetch images for word
+    async function fetchWordImages(word, isFullscreen = false) {
+      const gridId = `definitionImagesGrid${isFullscreen ? 'Fullscreen' : ''}`;
+      const grid = document.getElementById(gridId);
+      
+      if (!grid) return;
+      
+      try {
+        // Using Pixabay API (free, no key required for basic usage)
+        // Alternative: Use Unsplash API with your own key for better quality
+        const response = await fetch(`https://pixabay.com/api/?key=9656065-a4094594c34f9ac14c7fc4c39&q=${encodeURIComponent(word)}&image_type=photo&per_page=6&safesearch=true`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch images');
+        }
+        
+        const data = await response.json();
+        
+        if (data.hits && data.hits.length > 0) {
+          // Display images
+          grid.innerHTML = data.hits.slice(0, 6).map((image, index) => `
+            <div class="definition-image-item" onclick="openImageViewer('${image.largeImageURL.replace(/'/g, "\\'")}')">
+              <img src="${image.previewURL}" alt="${word} ${index + 1}" loading="lazy">
+            </div>
+          `).join('');
+        } else {
+          grid.innerHTML = '<div class="definition-images-loading" style="grid-column: 1 / -1;">No images found</div>';
+        }
+      } catch (error) {
+        console.error('Error fetching images:', error);
+        grid.innerHTML = '<div class="definition-images-loading" style="grid-column: 1 / -1;">Failed to load images</div>';
+      }
+    }
+    
+    // Image viewer functions
+    function openImageViewer(imageUrl) {
+      const modal = document.getElementById('imageViewerModal');
+      const img = document.getElementById('imageViewerImg');
+      
+      if (modal && img) {
+        img.src = imageUrl;
+        modal.classList.add('show');
+        document.body.style.overflow = 'hidden';
+      }
+    }
+    
+    function closeImageViewer() {
+      const modal = document.getElementById('imageViewerModal');
+      
+      if (modal) {
+        modal.classList.remove('show');
+        document.body.style.overflow = '';
+      }
+    }
+    
+    // Close image viewer with Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const imageModal = document.getElementById('imageViewerModal');
+        if (imageModal && imageModal.classList.contains('show')) {
+          closeImageViewer();
+        }
+      }
+    });
     
     // Initialize definition popup when page loads
     window.addEventListener('load', () => {
