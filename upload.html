@@ -533,7 +533,7 @@
     
     function initDB() {
       return new Promise((resolve, reject) => {
-        const request = indexedDB.open(dbName, 3);
+        const request = indexedDB.open(dbName, 4);
         
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
@@ -549,6 +549,12 @@
           // Add notes store for compatibility with extractor pages
           if (!db.objectStoreNames.contains('pageNotes')) {
             db.createObjectStore('pageNotes', { keyPath: 'pageKey' });
+          }
+          if (!db.objectStoreNames.contains('savedQuotes')) {
+            db.createObjectStore('savedQuotes', { keyPath: 'id', autoIncrement: true });
+          }
+          if (!db.objectStoreNames.contains('savedMeanings')) {
+            db.createObjectStore('savedMeanings', { keyPath: 'id', autoIncrement: true });
           }
         };
       });

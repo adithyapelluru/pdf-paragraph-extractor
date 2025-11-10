@@ -1322,6 +1322,28 @@
       100% { transform: rotate(360deg); }
     }
     
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+    }
+    
+    @keyframes slideDown {
+      from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+      to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+      }
+    }
+    
     /* Mobile Responsive */
     @media (max-width: 768px) {
       .definition-popup {
@@ -1613,6 +1635,9 @@
             <div class="search-loading" id="searchLoading"></div>
             <button class="search-clear-btn" onclick="clearSearch()" title="Clear search">✕</button>
           </div>
+          <button class="page-btn" onclick="openQuotesViewer()" title="View saved quotes and meanings" style="white-space: nowrap;">
+            📚 My Library
+          </button>
         </div>
       </div>
       
@@ -1743,7 +1768,7 @@
     
     function initDB() {
       return new Promise((resolve, reject) => {
-        const request = indexedDB.open(dbName, 3);
+        const request = indexedDB.open(dbName, 4);
         
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
@@ -1758,6 +1783,12 @@
           }
           if (!db.objectStoreNames.contains(notesStoreName)) {
             db.createObjectStore(notesStoreName, { keyPath: 'pageKey' });
+          }
+          if (!db.objectStoreNames.contains('savedQuotes')) {
+            db.createObjectStore('savedQuotes', { keyPath: 'id', autoIncrement: true });
+          }
+          if (!db.objectStoreNames.contains('savedMeanings')) {
+            db.createObjectStore('savedMeanings', { keyPath: 'id', autoIncrement: true });
           }
         };
       });
@@ -3318,6 +3349,110 @@
       window.location.href = 'upload.html';
     }
     
+    // Quotes and Meanings Storage
+    const quotesStoreName = 'savedQuotes';
+    const meaningsStoreName = 'savedMeanings';
+    
+    async function saveQuote(quote, source = '') {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([quotesStoreName], 'readwrite');
+        const objectStore = transaction.objectStore(quotesStoreName);
+        const quoteData = {
+          text: quote,
+          source: source || currentFileName,
+          date: new Date().toISOString(),
+          timestamp: Date.now()
+        };
+        const request = objectStore.add(quoteData);
+        
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function saveMeaning(word, definition) {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([meaningsStoreName], 'readwrite');
+        const objectStore = transaction.objectStore(meaningsStoreName);
+        const meaningData = {
+          word: word,
+          definition: definition,
+          date: new Date().toISOString(),
+          timestamp: Date.now()
+        };
+        const request = objectStore.add(meaningData);
+        
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function getAllQuotes() {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([quotesStoreName], 'readonly');
+        const objectStore = transaction.objectStore(quotesStoreName);
+        const request = objectStore.getAll();
+        
+        request.onsuccess = () => {
+          const quotes = request.result.sort((a, b) => b.timestamp - a.timestamp);
+          resolve(quotes);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function getAllMeanings() {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([meaningsStoreName], 'readonly');
+        const objectStore = transaction.objectStore(meaningsStoreName);
+        const request = objectStore.getAll();
+        
+        request.onsuccess = () => {
+          const meanings = request.result.sort((a, b) => b.timestamp - a.timestamp);
+          resolve(meanings);
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function deleteQuote(id) {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([quotesStoreName], 'readwrite');
+        const objectStore = transaction.objectStore(quotesStoreName);
+        const request = objectStore.delete(id);
+        
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    async function deleteMeaning(id) {
+      if (!db) await initDB();
+      
+      return new Promise((resolve, reject) => {
+        const transaction = db.transaction([meaningsStoreName], 'readwrite');
+        const objectStore = transaction.objectStore(meaningsStoreName);
+        const request = objectStore.delete(id);
+        
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    function openQuotesViewer() {
+      window.open('quotes-viewer.html', '_blank');
+    }
+    
     // Theme toggle functionality
     function toggleTheme() {
       const html = document.documentElement;
@@ -3563,19 +3698,6 @@
         return;
       }
       
-      // Only show definition for single words (no spaces)
-      const words = selectedText.split(/\s+/);
-      if (words.length !== 1) {
-        return;
-      }
-      
-      // Clean the word (remove punctuation)
-      const word = selectedText.replace(/[^\w\s'-]/g, '').toLowerCase();
-      
-      if (word.length < 2) {
-        return;
-      }
-      
       // Get selection position
       if (selection.rangeCount === 0) {
         return;
@@ -3584,8 +3706,83 @@
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       
-      // Show popup near selection
-      showDefinitionPopup(word, rect);
+      // Check if it's a single word or multiple words
+      const words = selectedText.split(/\s+/);
+      
+      if (words.length === 1) {
+        // Single word - show definition
+        const word = selectedText.replace(/[^\w\s'-]/g, '').toLowerCase();
+        
+        if (word.length < 2) {
+          return;
+        }
+        
+        showDefinitionPopup(word, rect);
+      } else {
+        // Multiple words - auto-save after 5 seconds
+        startQuoteAutoSave(selectedText);
+      }
+    }
+    
+    let quoteAutoSaveTimeout = null;
+    let lastSelectedQuote = '';
+    
+    function startQuoteAutoSave(quote) {
+      // Clear any existing timeout
+      if (quoteAutoSaveTimeout) {
+        clearTimeout(quoteAutoSaveTimeout);
+      }
+      
+      lastSelectedQuote = quote;
+      
+      // Set new timeout for 5 seconds
+      quoteAutoSaveTimeout = setTimeout(async () => {
+        // Check if selection is still active
+        const currentSelection = window.getSelection().toString().trim();
+        
+        if (currentSelection === lastSelectedQuote) {
+          try {
+            await saveQuote(lastSelectedQuote);
+            console.log('Quote auto-saved:', lastSelectedQuote);
+            
+            // Show brief notification
+            showQuoteSavedNotification();
+          } catch (error) {
+            console.error('Error auto-saving quote:', error);
+          }
+        }
+      }, 5000);
+    }
+    
+    function showQuoteSavedNotification() {
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.style.cssText = `
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #4CAF50;
+        color: white;
+        padding: 15px 30px;
+        border-radius: 25px;
+        font-size: 16px;
+        font-weight: bold;
+        box-shadow: 0 5px 20px rgba(76, 175, 80, 0.4);
+        z-index: 10000;
+        animation: slideUp 0.3s ease;
+      `;
+      notification.textContent = '✓ Quote saved to library';
+      
+      document.body.appendChild(notification);
+      
+      // Remove after 3 seconds
+      setTimeout(() => {
+        notification.style.animation = 'slideDown 0.3s ease';
+        setTimeout(() => {
+          document.body.removeChild(notification);
+        }, 300);
+      }, 3000);
     }
     
     function showDefinitionPopup(word, rect) {
@@ -3773,9 +3970,46 @@
       
       if (!html || html.indexOf('definition-text') === -1) {
         html = '<div class="definition-error">No definition found</div>';
+      } else {
+        // Add save button
+        html += `<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border-color);">
+          <button class="notes-btn" onclick="saveCurrentMeaning('${word.replace(/'/g, "\\'")}', event)" style="width: 100%; justify-content: center;">
+            💾 Save to Library
+          </button>
+        </div>`;
+        
+        // Auto-save the meaning
+        const definitionText = data.shortdef ? data.shortdef.join('; ') : 'Definition available';
+        saveMeaning(word, definitionText).catch(err => console.error('Error auto-saving meaning:', err));
       }
       
       contentDiv.innerHTML = html;
+    }
+    
+    async function saveCurrentMeaning(word, event) {
+      if (event) event.stopPropagation();
+      
+      try {
+        // Get the definition text from the popup
+        const contentDiv = document.querySelector('.definition-popup.show .definition-content');
+        const defTexts = contentDiv.querySelectorAll('.definition-text');
+        const definition = Array.from(defTexts).map(el => el.textContent).join(' ');
+        
+        await saveMeaning(word, definition);
+        
+        // Show feedback
+        const btn = event.target;
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '✓ Saved!';
+        btn.style.background = '#4CAF50';
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+          btn.style.background = '';
+        }, 2000);
+      } catch (error) {
+        console.error('Error saving meaning:', error);
+        alert('Failed to save meaning');
+      }
     }
     
     function displayDefinitionError(message, isFullscreen = false) {
