@@ -1482,23 +1482,29 @@
     
     function scrollToHighlight(notesDiv) {
       const highlightedWord = notesDiv.querySelector('.highlight-word');
-      if (highlightedWord) {
-        // Get the position of the highlighted word relative to the container
-        const containerRect = notesDiv.getBoundingClientRect();
-        const wordRect = highlightedWord.getBoundingClientRect();
-        
-        // Calculate if the word is outside the visible area
-        const isAbove = wordRect.top < containerRect.top;
-        const isBelow = wordRect.bottom > containerRect.bottom;
-        
-        if (isAbove || isBelow) {
-          // Scroll to center the highlighted word
-          const wordTop = highlightedWord.offsetTop;
-          const containerHeight = notesDiv.clientHeight;
-          const wordHeight = highlightedWord.offsetHeight;
-          
-          notesDiv.scrollTop = wordTop - (containerHeight / 2) + (wordHeight / 2);
-        }
+      if (!highlightedWord) return;
+      
+      // Get the position of the highlighted word relative to the container
+      const containerRect = notesDiv.getBoundingClientRect();
+      const wordRect = highlightedWord.getBoundingClientRect();
+      
+      // Calculate relative positions
+      const wordTopRelative = wordRect.top - containerRect.top;
+      const wordBottomRelative = wordRect.bottom - containerRect.top;
+      
+      // Define visible area with padding (keep word away from edges)
+      const topPadding = 30;
+      const bottomPadding = 30;
+      const visibleTop = topPadding;
+      const visibleBottom = notesDiv.clientHeight - bottomPadding;
+      
+      // Check if word is outside the comfortable visible area
+      if (wordTopRelative < visibleTop) {
+        // Word is above visible area - scroll up
+        notesDiv.scrollTop += (wordTopRelative - visibleTop);
+      } else if (wordBottomRelative > visibleBottom) {
+        // Word is below visible area - scroll down
+        notesDiv.scrollTop += (wordBottomRelative - visibleBottom);
       }
     }
     
@@ -1523,6 +1529,9 @@
       const after = escapeHtml(text.substring(wordEnd));
       
       notesDiv.innerHTML = before + '<span class="highlight-word">' + word + '</span>' + after;
+      
+      // Auto-scroll to keep highlighted word visible
+      scrollToHighlight(notesDiv);
     }
     
     function highlightWordByIndex(notesDiv, wordIndex, words) {
@@ -1533,6 +1542,9 @@
         return escapeHtml(word);
       });
       notesDiv.innerHTML = htmlParts.join(' ');
+      
+      // Auto-scroll to keep highlighted word visible
+      scrollToHighlight(notesDiv);
     }
     
     function toggleSpeech(pageKey, pageNum) {
