@@ -397,7 +397,7 @@
     
     function initDB() {
       return new Promise((resolve, reject) => {
-        const request = indexedDB.open(dbName, 2);
+        const request = indexedDB.open(dbName, 3);
         
         request.onerror = () => reject(request.error);
         request.onsuccess = () => {
@@ -671,19 +671,27 @@
         await initDB();
         
         // Import files
-        const filesTransaction = db.transaction(['files'], 'readwrite');
-        const filesStore = filesTransaction.objectStore('files');
-        
+        let importedFiles = 0;
         for (const fileData of importData.files) {
-          // Remove id to let it auto-generate (avoid conflicts)
-          const { id, ...fileWithoutId } = fileData;
-          filesStore.add(fileWithoutId);
+          try {
+            const filesTransaction = db.transaction(['files'], 'readwrite');
+            const filesStore = filesTransaction.objectStore('files');
+            
+            // Remove id to let it auto-generate (avoid conflicts)
+            const { id, ...fileWithoutId } = fileData;
+            filesStore.add(fileWithoutId);
+            
+            await new Promise((resolve, reject) => {
+              filesTransaction.oncomplete = () => {
+                importedFiles++;
+                resolve();
+              };
+              filesTransaction.onerror = () => reject(filesTransaction.error);
+            });
+          } catch (error) {
+            console.warn(`Failed to import file ${fileData.name}:`, error);
+          }
         }
-        
-        await new Promise((resolve, reject) => {
-          filesTransaction.oncomplete = resolve;
-          filesTransaction.onerror = () => reject(filesTransaction.error);
-        });
         
         // Import notes
         const notesTransaction = db.transaction(['pageNotes'], 'readwrite');
@@ -698,7 +706,7 @@
           notesTransaction.onerror = () => reject(notesTransaction.error);
         });
         
-        alert('✓ Data imported successfully!');
+        alert(`✓ Data imported successfully!\nFiles: ${importedFiles}/${importData.files.length}\nNotes: ${importData.notes.length}`);
         await displayFiles();
         
       } catch (error) {
