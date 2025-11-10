@@ -119,6 +119,9 @@
     }
     
     .file-info {
+      position: sticky;
+      top: 0;
+      z-index: 100;
       background: #f8f9ff;
       padding: 20px;
       border-radius: 10px;
@@ -126,6 +129,22 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 15px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    .file-info-text {
+      flex: 0 0 auto;
+    }
+    
+    .file-info-actions {
+      flex: 1;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
     }
     
     .page-section {
@@ -401,6 +420,26 @@
     
     .notes-btn.fullscreen:hover {
       background: #0097A7;
+    }
+    
+    .notes-btn.rewind {
+      background: #FF5722;
+      min-width: 32px;
+      padding: 6px 8px;
+    }
+    
+    .notes-btn.rewind:hover {
+      background: #E64A19;
+    }
+    
+    .notes-btn.forward {
+      background: #FF5722;
+      min-width: 32px;
+      padding: 6px 8px;
+    }
+    
+    .notes-btn.forward:hover {
+      background: #E64A19;
     }
     
     @keyframes pulse {
@@ -702,6 +741,124 @@
       margin-right: 10px;
     }
     
+    .search-box {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex: 1;
+      max-width: 400px;
+    }
+    
+    .search-input {
+      flex: 1;
+      padding: 10px 15px;
+      border: 2px solid #667eea;
+      border-radius: 20px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: all 0.3s;
+      min-width: 200px;
+    }
+    
+    .search-input:focus {
+      border-color: #764ba2;
+      box-shadow: 0 0 10px rgba(102, 126, 234, 0.3);
+    }
+    
+    .search-clear-btn {
+      background: #f44336;
+      color: white;
+      border: none;
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      flex-shrink: 0;
+    }
+    
+    .search-clear-btn:hover {
+      background: #d32f2f;
+      transform: rotate(90deg);
+    }
+    
+    .search-loading {
+      width: 20px;
+      height: 20px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      display: none;
+      flex-shrink: 0;
+    }
+    
+    .search-loading.show {
+      display: block;
+    }
+    
+    .search-results {
+      display: none;
+      padding: 15px;
+      background: white;
+      border-radius: 10px;
+      border: 2px solid #4CAF50;
+      margin-bottom: 20px;
+    }
+    
+    .search-results.show {
+      display: block;
+    }
+    
+    .search-results-title {
+      font-weight: bold;
+      color: #4CAF50;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+    
+    .search-matches {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    
+    .search-match-item {
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+      color: white;
+      padding: 8px 15px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-size: 14px;
+      font-weight: bold;
+    }
+    
+    .search-match-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(76, 175, 80, 0.4);
+    }
+    
+    .search-no-results {
+      color: #f44336;
+      font-style: italic;
+    }
+    
+    .paragraph-item.search-highlight {
+      animation: search-pulse 1s ease-in-out;
+      box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+    }
+    
+    @keyframes search-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.1); }
+    }
+    
     .loading {
       text-align: center;
       padding: 40px;
@@ -764,8 +921,28 @@
       
       .file-info {
         flex-direction: column;
-        gap: 10px;
+        gap: 15px;
         text-align: center;
+        border-radius: 0;
+        top: 0;
+      }
+      
+      .file-info-text {
+        width: 100%;
+      }
+      
+      .file-info-actions {
+        width: 100%;
+        flex-direction: column;
+      }
+      
+      .search-box {
+        width: 100%;
+        max-width: 100%;
+      }
+      
+      .search-input {
+        min-width: 0;
       }
       
       .page-section {
@@ -798,6 +975,15 @@
       .page-btn {
         font-size: 12px;
         padding: 6px 12px;
+      }
+      
+      .search-match-item {
+        font-size: 12px;
+        padding: 6px 12px;
+      }
+      
+      .btn {
+        width: 100%;
       }
       
       .notes-header {
@@ -940,12 +1126,28 @@
     
     <div class="results" id="results">
       <div class="file-info">
-        <div>
+        <div class="file-info-text">
           <strong>File:</strong> <span id="fileName"></span><br>
           <strong>Paragraphs:</strong> <span id="paraCount"></span>
         </div>
-        <button class="btn back-btn" onclick="resetApp()">Upload Another</button>
+        <div class="file-info-actions">
+          <div class="search-box">
+            <input 
+              type="text" 
+              id="searchInput" 
+              class="search-input" 
+              placeholder="Search text..."
+              oninput="searchParagraphs()"
+            >
+            <div class="search-loading" id="searchLoading"></div>
+            <button class="search-clear-btn" onclick="clearSearch()" title="Clear search">✕</button>
+          </div>
+          <button class="btn back-btn" onclick="resetApp()">Upload Another</button>
+        </div>
       </div>
+      
+      <div class="search-results" id="searchResults"></div>
+      
       <div id="paragraphsContainer"></div>
     </div>
   </div>
@@ -1464,17 +1666,21 @@
                   <button class="notes-btn" id="speak-btn-${page.pageNum}" onclick="toggleSpeech('${pageKey}', ${page.pageNum})" title="Play/Pause speech">
                     🔊 Speak
                   </button>
-                  <button class="notes-btn stop" id="stop-btn-${page.pageNum}" onclick="stopSpeech(${page.pageNum})" title="Stop speech" style="display: none;">
-                    ⏹️ Stop
+                  <button class="notes-btn rewind" id="rewind-btn-${page.pageNum}" onclick="event.stopPropagation(); skipBackward(${page.pageNum})" title="Skip backward 15s" style="display: none;">
+                    ⏪
                   </button>
-                  <div class="font-size-controls">
-                    <button class="notes-btn font-control" onclick="changeFontSize('${pageKey}', -1)" title="Decrease font size">
-                      A-
-                    </button>
-                    <button class="notes-btn font-control" onclick="changeFontSize('${pageKey}', 1)" title="Increase font size">
-                      A+
-                    </button>
-                  </div>
+                  <button class="notes-btn forward" id="forward-btn-${page.pageNum}" onclick="event.stopPropagation(); skipForward(${page.pageNum})" title="Skip forward 15s" style="display: none;">
+                    ⏩
+                  </button>
+                  <button class="notes-btn stop" id="stop-btn-${page.pageNum}" onclick="stopSpeech(${page.pageNum})" title="Stop speech" style="display: none;">
+                    ⏹️
+                  </button>
+                  <button class="notes-btn font-control" onclick="changeFontSize('${pageKey}', -1)" title="Decrease font size">
+                    A-
+                  </button>
+                  <button class="notes-btn font-control" onclick="changeFontSize('${pageKey}', 1)" title="Increase font size">
+                    A+
+                  </button>
                   <button class="notes-btn fullscreen" onclick="openFullscreenNotes('${pageKey}', ${page.pageNum})" title="View in fullscreen">
                     ⛶ Fullscreen
                   </button>
@@ -1595,6 +1801,9 @@
     let originalText = '';
     let highlightInterval = null;
     let isPaused = false;
+    let pausedAtWord = 0;
+    let allWords = [];
+    let currentSpeed = 1.0;
     
     function updateSpeedDisplay(pageNum) {
       const slider = document.getElementById(`speed-${pageNum}`);
@@ -1620,6 +1829,8 @@
         
         const speakBtn = document.getElementById(`speak-btn-${pageNum}`);
         const stopBtn = document.getElementById(`stop-btn-${pageNum}`);
+        const rewindBtn = document.getElementById(`rewind-btn-${pageNum}`);
+        const forwardBtn = document.getElementById(`forward-btn-${pageNum}`);
         const notesDiv = document.querySelector(`[data-page-num="${pageNum}"]`);
         
         if (speakBtn) {
@@ -1629,6 +1840,12 @@
         if (stopBtn) {
           stopBtn.style.display = 'none';
         }
+        if (rewindBtn) {
+          rewindBtn.style.display = 'none';
+        }
+        if (forwardBtn) {
+          forwardBtn.style.display = 'none';
+        }
         if (notesDiv) {
           clearHighlights(notesDiv);
         }
@@ -1636,7 +1853,213 @@
         currentSpeech = null;
         currentSpeakingPage = null;
         isPaused = false;
+        speechStartTime = 0;
+        elapsedTime = 0;
       }
+    }
+    
+    // Skip backward 15 seconds
+    function skipBackward(pageNum) {
+      console.log('Skip backward clicked', {pageNum, currentSpeakingPage, allWordsLength: allWords.length, pausedAtWord});
+      
+      if (currentSpeakingPage !== pageNum) {
+        console.log('Not currently speaking this page');
+        return;
+      }
+      
+      if (!allWords.length) {
+        console.log('No words available');
+        return;
+      }
+      
+      // Calculate approximate words per second
+      const baseWPM = 150;
+      const adjustedWPM = baseWPM * currentSpeed;
+      const wordsPerSecond = adjustedWPM / 60;
+      const wordsToSkip = Math.floor(wordsPerSecond * 15); // 15 seconds
+      
+      // Calculate new position
+      const newWordIndex = Math.max(0, pausedAtWord - wordsToSkip);
+      
+      console.log(`Skipping backward from word ${pausedAtWord} to ${newWordIndex} (${wordsToSkip} words)`);
+      
+      // Restart from new position
+      restartSpeechFromWord(pageNum, newWordIndex);
+    }
+    
+    // Skip forward 15 seconds
+    function skipForward(pageNum) {
+      console.log('Skip forward clicked', {pageNum, currentSpeakingPage, allWordsLength: allWords.length, pausedAtWord});
+      
+      if (currentSpeakingPage !== pageNum) {
+        console.log('Not currently speaking this page');
+        return;
+      }
+      
+      if (!allWords.length) {
+        console.log('No words available');
+        return;
+      }
+      
+      // Calculate approximate words per second
+      const baseWPM = 150;
+      const adjustedWPM = baseWPM * currentSpeed;
+      const wordsPerSecond = adjustedWPM / 60;
+      const wordsToSkip = Math.floor(wordsPerSecond * 15); // 15 seconds
+      
+      // Calculate new position
+      const newWordIndex = Math.min(allWords.length - 1, pausedAtWord + wordsToSkip);
+      
+      console.log(`Skipping forward from word ${pausedAtWord} to ${newWordIndex} (${wordsToSkip} words)`);
+      
+      // Restart from new position
+      restartSpeechFromWord(pageNum, newWordIndex);
+    }
+    
+    // Restart speech from a specific word
+    function restartSpeechFromWord(pageNum, wordIndex) {
+      const pageKey = `${currentFileName}_page_${pageNum}`;
+      const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
+      const speedSlider = document.getElementById(`speed-${pageNum}`);
+      const stopBtn = document.getElementById(`stop-btn-${pageNum}`);
+      
+      if (!notesDiv || !allWords.length) return;
+      
+      // Cancel current speech
+      window.speechSynthesis.cancel();
+      clearInterval(highlightInterval);
+      
+      // Get remaining text from word index
+      const remainingWords = allWords.slice(wordIndex);
+      const remainingText = remainingWords.join(' ');
+      
+      if (!remainingText) {
+        stopSpeech(pageNum);
+        return;
+      }
+      
+      // Update paused position
+      pausedAtWord = wordIndex;
+      
+      // Start speech from new position
+      const speed = currentSpeed;
+      let currentWordIndex = wordIndex;
+      let boundarySupported = false;
+      
+      // Create new speech utterance
+      currentSpeech = new SpeechSynthesisUtterance(remainingText);
+      currentSpeech.rate = speed;
+      currentSpeech.pitch = 1.0;
+      currentSpeech.volume = 1.0;
+      
+      // Try to get a voice
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        const englishVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
+        currentSpeech.voice = englishVoice;
+        currentSpeech.lang = englishVoice.lang;
+      } else {
+        currentSpeech.lang = 'en-US';
+      }
+      
+      // Boundary events
+      currentSpeech.onboundary = (event) => {
+        if (event.name === 'word' && event.charIndex !== undefined) {
+          if (!boundarySupported) {
+            boundarySupported = true;
+            if (highlightInterval) {
+              clearInterval(highlightInterval);
+              highlightInterval = null;
+            }
+          }
+          
+          // Calculate position in full text
+          let charCount = 0;
+          for (let i = 0; i < wordIndex; i++) {
+            charCount += allWords[i].length + 1;
+          }
+          charCount += event.charIndex;
+          
+          highlightTextAtPosition(notesDiv, charCount, originalText);
+          
+          // Track word position
+          let localCharCount = 0;
+          for (let i = 0; i < remainingWords.length; i++) {
+            if (localCharCount >= event.charIndex) {
+              pausedAtWord = wordIndex + i;
+              break;
+            }
+            localCharCount += remainingWords[i].length + 1;
+          }
+        }
+      };
+      
+      // Start event
+      currentSpeech.onstart = () => {
+        const baseWPM = 150;
+        const adjustedWPM = baseWPM * speed;
+        const avgWordDuration = (60000 / adjustedWPM);
+        
+        if (allWords.length > currentWordIndex) {
+          highlightWordByIndex(notesDiv, currentWordIndex, allWords);
+          currentWordIndex++;
+        }
+        
+        highlightInterval = setInterval(() => {
+          if (!boundarySupported && currentWordIndex < allWords.length) {
+            highlightWordByIndex(notesDiv, currentWordIndex, allWords);
+            pausedAtWord = currentWordIndex;
+            currentWordIndex++;
+          } else if (boundarySupported && highlightInterval) {
+            clearInterval(highlightInterval);
+            highlightInterval = null;
+          }
+        }, avgWordDuration);
+      };
+      
+      // End event
+      currentSpeech.onend = () => {
+        const speakBtn = document.getElementById(`speak-btn-${pageNum}`);
+        const rewindBtn = document.getElementById(`rewind-btn-${pageNum}`);
+        const forwardBtn = document.getElementById(`forward-btn-${pageNum}`);
+        
+        if (speakBtn) {
+          speakBtn.classList.remove('speaking', 'paused');
+          speakBtn.innerHTML = '🔊 Speak';
+        }
+        if (stopBtn) {
+          stopBtn.style.display = 'none';
+        }
+        if (rewindBtn) {
+          rewindBtn.style.display = 'none';
+        }
+        if (forwardBtn) {
+          forwardBtn.style.display = 'none';
+        }
+        clearInterval(highlightInterval);
+        clearHighlights(notesDiv);
+        currentSpeech = null;
+        currentSpeakingPage = null;
+        isPaused = false;
+        pausedAtWord = 0;
+      };
+      
+      // Error event
+      currentSpeech.onerror = (event) => {
+        if (event.error === 'interrupted' || event.error === 'canceled') {
+          return;
+        }
+        console.error('Speech synthesis error:', event.error);
+        stopSpeech(pageNum);
+      };
+      
+      // Start speaking
+      setTimeout(() => {
+        window.speechSynthesis.cancel();
+        setTimeout(() => {
+          window.speechSynthesis.speak(currentSpeech);
+        }, 50);
+      }, 100);
     }
     
     function clearHighlights(notesDiv) {
@@ -1818,16 +2241,13 @@
       
       // Split text into words for fallback highlighting
       const words = noteText.split(/\s+/);
+      allWords = words; // Store globally for skip functions
+      pausedAtWord = 0; // Reset position
       let currentWordIndex = 0;
       let boundarySupported = false;
       
-      // Check text length - mobile browsers have limits
-      const maxLength = 4000; // Safe limit for mobile
+      // No truncation - we'll handle long text properly
       let textToSpeak = noteText;
-      if (noteText.length > maxLength) {
-        textToSpeak = noteText.substring(0, maxLength);
-        console.warn('Text truncated for mobile compatibility');
-      }
       
       // Create and configure speech
       currentSpeech = new SpeechSynthesisUtterance(textToSpeak);
@@ -1835,6 +2255,7 @@
       
       // Configure speech properties with user-selected speed
       const speed = parseFloat(speedSlider.value);
+      currentSpeed = speed; // Store globally for skip functions
       currentSpeech.rate = speed;
       currentSpeech.pitch = 1.0;
       currentSpeech.volume = 1.0;
@@ -1861,35 +2282,72 @@
         stopBtn.style.display = 'flex';
       }
       
+      // Show skip buttons
+      const rewindBtn = document.getElementById(`rewind-btn-${pageNum}`);
+      const forwardBtn = document.getElementById(`forward-btn-${pageNum}`);
+      if (rewindBtn) {
+        rewindBtn.style.display = 'flex';
+      }
+      if (forwardBtn) {
+        forwardBtn.style.display = 'flex';
+      }
+      
       // Try to use boundary events (more accurate)
       currentSpeech.onboundary = (event) => {
         if (event.name === 'word' && event.charIndex !== undefined) {
-          boundarySupported = true;
-          // Clear the fallback interval once we know boundary events work
-          if (highlightInterval) {
-            clearInterval(highlightInterval);
-            highlightInterval = null;
+          if (!boundarySupported) {
+            boundarySupported = true;
+            console.log('Using boundary events for accurate highlighting');
+            // Clear the fallback interval once we know boundary events work
+            if (highlightInterval) {
+              clearInterval(highlightInterval);
+              highlightInterval = null;
+            }
           }
+          
           highlightTextAtPosition(notesDiv, event.charIndex, noteText);
+          
+          // Track word position for pause/resume
+          let charCount = 0;
+          for (let i = 0; i < words.length; i++) {
+            if (charCount >= event.charIndex) {
+              pausedAtWord = i;
+              break;
+            }
+            charCount += words[i].length + 1; // +1 for space
+          }
         }
       };
       
       // Handle speech start - begin highlighting when speech actually starts
       currentSpeech.onstart = () => {
         console.log('Speech started');
-        // Fallback: timer-based highlighting (faster timing for better sync)
-        const avgWordDuration = (60000 / (180 * speed)); // 180 WPM for faster highlighting
+        
+        // Calculate word duration based on actual speech rate
+        // Average speaking rate is 150 WPM, adjusted by speed setting
+        const baseWPM = 150; // Base words per minute
+        const adjustedWPM = baseWPM * speed; // Adjust for speed setting
+        const avgWordDuration = (60000 / adjustedWPM); // Milliseconds per word
+        
+        console.log(`Highlighting: ${adjustedWPM} WPM, ${avgWordDuration.toFixed(0)}ms per word`);
         
         // Start highlighting with first word
         if (words.length > 0) {
           highlightWordByIndex(notesDiv, 0, words);
           currentWordIndex = 1;
+          pausedAtWord = 0;
         }
         
+        // Use fallback only if boundary events don't work
         highlightInterval = setInterval(() => {
           if (!boundarySupported && currentWordIndex < words.length) {
             highlightWordByIndex(notesDiv, currentWordIndex, words);
+            pausedAtWord = currentWordIndex;
             currentWordIndex++;
+          } else if (boundarySupported && highlightInterval) {
+            // Boundary events are working, clear the interval
+            clearInterval(highlightInterval);
+            highlightInterval = null;
           }
         }, avgWordDuration);
       };
@@ -2224,6 +2682,181 @@
     // Go back to file manager
     function goBackToManager() {
       window.location.href = 'upload.html';
+    }
+    
+    // Search functionality
+    let searchTimeout;
+    let searchAbortController = null;
+    
+    function searchParagraphs() {
+      const searchInput = document.getElementById('searchInput');
+      const searchResults = document.getElementById('searchResults');
+      const searchLoading = document.getElementById('searchLoading');
+      const query = searchInput.value.trim().toLowerCase();
+      
+      // Cancel previous search
+      if (searchAbortController) {
+        searchAbortController.abort();
+      }
+      
+      // Clear previous timeout
+      clearTimeout(searchTimeout);
+      
+      if (!query) {
+        searchResults.classList.remove('show');
+        searchLoading.classList.remove('show');
+        clearSearchHighlights();
+        return;
+      }
+      
+      // Show loading
+      searchLoading.classList.add('show');
+      
+      // Debounce search for better performance
+      searchTimeout = setTimeout(() => {
+        performSearch(query, searchResults, searchLoading);
+      }, 300);
+    }
+    
+    function performSearch(query, searchResults, searchLoading) {
+      // Create abort controller for this search
+      searchAbortController = new AbortController();
+      
+      try {
+        // Search through all paragraphs
+        const matches = [];
+        allParagraphs.forEach((para, index) => {
+          // Check if search was cancelled
+          if (searchAbortController.signal.aborted) {
+            throw new Error('Search cancelled');
+          }
+          
+          if (para.toLowerCase().includes(query)) {
+            matches.push({
+              index: index,
+              text: para,
+              pageNum: getPageNumberForParagraph(index)
+            });
+          }
+        });
+        
+        // Hide loading
+        searchLoading.classList.remove('show');
+        
+        // Display results
+        if (matches.length > 0) {
+          const matchesByPage = {};
+          matches.forEach(match => {
+            if (!matchesByPage[match.pageNum]) {
+              matchesByPage[match.pageNum] = [];
+            }
+            matchesByPage[match.pageNum].push(match.index);
+          });
+          
+          let resultsHTML = `
+            <div class="search-results-title">
+              Found in ${matches.length} paragraph(s) across ${Object.keys(matchesByPage).length} page(s):
+            </div>
+            <div class="search-matches">
+          `;
+          
+          Object.keys(matchesByPage).sort((a, b) => parseInt(a) - parseInt(b)).forEach(pageNum => {
+            const paraNumbers = matchesByPage[pageNum];
+            resultsHTML += `
+              <div class="search-match-item" onclick="scrollToParagraph(${paraNumbers[0]})">
+                Page ${pageNum} (${paraNumbers.length} match${paraNumbers.length > 1 ? 'es' : ''})
+              </div>
+            `;
+          });
+          
+          resultsHTML += '</div>';
+          searchResults.innerHTML = resultsHTML;
+          searchResults.classList.add('show');
+          
+          // Highlight matching paragraphs
+          highlightSearchMatches(matches.map(m => m.index));
+        } else {
+          searchResults.innerHTML = '<div class="search-no-results">No matches found</div>';
+          searchResults.classList.add('show');
+          clearSearchHighlights();
+        }
+      } catch (error) {
+        if (error.message === 'Search cancelled') {
+          console.log('Search was cancelled');
+        } else {
+          console.error('Search error:', error);
+        }
+        searchLoading.classList.remove('show');
+      }
+    }
+    
+    function getPageNumberForParagraph(paraIndex) {
+      let count = 0;
+      const pageSections = document.querySelectorAll('.page-section');
+      
+      for (let section of pageSections) {
+        const pageNum = parseInt(section.dataset.page);
+        const parasInPage = section.querySelectorAll('.paragraph-item').length;
+        
+        if (paraIndex < count + parasInPage) {
+          return pageNum;
+        }
+        count += parasInPage;
+      }
+      return 1;
+    }
+    
+    function highlightSearchMatches(indices) {
+      clearSearchHighlights();
+      
+      indices.forEach(index => {
+        const paraBtn = document.getElementById(`para-btn-${index}`);
+        if (paraBtn) {
+          paraBtn.classList.add('search-highlight');
+        }
+      });
+    }
+    
+    function clearSearchHighlights() {
+      document.querySelectorAll('.paragraph-item.search-highlight').forEach(item => {
+        item.classList.remove('search-highlight');
+      });
+    }
+    
+    function scrollToParagraph(paraIndex) {
+      const paraBtn = document.getElementById(`para-btn-${paraIndex}`);
+      if (paraBtn) {
+        paraBtn.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
+        });
+        
+        // Flash animation
+        paraBtn.classList.remove('search-highlight');
+        setTimeout(() => {
+          paraBtn.classList.add('search-highlight');
+        }, 10);
+      }
+    }
+    
+    function clearSearch() {
+      const searchInput = document.getElementById('searchInput');
+      const searchResults = document.getElementById('searchResults');
+      const searchLoading = document.getElementById('searchLoading');
+      
+      // Cancel ongoing search
+      if (searchAbortController) {
+        searchAbortController.abort();
+        searchAbortController = null;
+      }
+      
+      // Clear timeout
+      clearTimeout(searchTimeout);
+      
+      searchInput.value = '';
+      searchResults.classList.remove('show');
+      searchLoading.classList.remove('show');
+      clearSearchHighlights();
     }
     
     // Fullscreen notes functionality
