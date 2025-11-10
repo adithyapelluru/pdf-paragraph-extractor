@@ -1096,16 +1096,35 @@
           // Remove script and style tags
           doc.querySelectorAll('script, style').forEach(el => el.remove());
           
-          // Extract paragraphs from the HTML
+          // Extract ALL text content from the HTML
           const paragraphs = [];
-          const textElements = doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6');
+          
+          // Get all text-containing elements
+          const textElements = doc.querySelectorAll('p, div, h1, h2, h3, h4, h5, h6, li, td, th, span, blockquote, pre, code');
           
           textElements.forEach(el => {
-            const text = el.textContent.trim();
-            if (text.length > 30) {
-              paragraphs.push(text);
+            // Skip if this element's text is already captured by a parent
+            const hasTextParent = Array.from(textElements).some(parent => 
+              parent !== el && parent.contains(el)
+            );
+            
+            if (!hasTextParent) {
+              const text = el.textContent.trim();
+              if (text.length > 0) { // Keep all text, no minimum length
+                paragraphs.push(text);
+              }
             }
           });
+          
+          // If no structured elements found, get all text from body
+          if (paragraphs.length === 0) {
+            const bodyText = doc.body?.textContent.trim();
+            if (bodyText) {
+              // Split by double line breaks to create paragraphs
+              const textParagraphs = bodyText.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+              paragraphs.push(...textParagraphs);
+            }
+          }
           
           if (paragraphs.length > 0) {
             pageData.push({
@@ -1152,15 +1171,17 @@
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
           
-          // Group text items by line
+          // Group text items by line based on Y position
           const lines = [];
           let currentLine = { items: [], y: null };
           
           textContent.items.forEach(item => {
+            if (!item.str || item.str.trim() === '') return; // Skip empty items
+            
             const y = Math.round(item.transform[5]);
             
-            // If this is a new line
-            if (currentLine.y === null || Math.abs(currentLine.y - y) > 5) {
+            // If this is a new line (different Y position)
+            if (currentLine.y === null || Math.abs(currentLine.y - y) > 3) {
               if (currentLine.items.length > 0) {
                 lines.push(currentLine);
               }
@@ -1179,7 +1200,7 @@
           // Sort lines by Y position (top to bottom)
           lines.sort((a, b) => b.y - a.y);
           
-          // Build paragraphs from lines
+          // Build paragraphs from lines with simpler logic
           const paragraphs = [];
           let currentParagraph = '';
           let lastLineY = null;
@@ -1189,24 +1210,30 @@
             line.items.sort((a, b) => a.transform[4] - b.transform[4]);
             
             // Combine items in line to form text
-            const lineText = line.items.map(item => item.str).join(' ');
+            const lineText = line.items.map(item => item.str).join(' ').trim();
             
-            // Check if this is a new paragraph
-            // Paragraph break if:
-            // 1. Large vertical gap (more than 1.5x typical line height)
-            // 2. The line is indented (first line of paragraph)
-            // 3. The previous line ended with a sentence terminator
+            if (!lineText) return; // Skip empty lines
             
-            const isLargeGap = lastLineY !== null && (lastLineY - line.y) > 20;
-            const isIndented = line.items[0]?.transform[4] > 50;
-            const prevEndsWithTerminator = /[.!?]\s*$/.test(currentParagraph);
+            // Check for paragraph break (larger vertical gap)
+            const verticalGap = lastLineY !== null ? (lastLineY - line.y) : 0;
+            const isLargeGap = verticalGap > 15; // Paragraph break threshold
             
-            if (currentParagraph && (isLargeGap || (isIndented && prevEndsWithTerminator))) {
+            if (currentParagraph && isLargeGap) {
+              // Save current paragraph and start new one
               paragraphs.push(currentParagraph.trim());
               currentParagraph = lineText;
             } else {
               // Continue current paragraph
-              currentParagraph += (currentParagraph ? ' ' : '') + lineText;
+              if (currentParagraph) {
+                // Add space between lines unless previous line ends with hyphen
+                if (currentParagraph.endsWith('-')) {
+                  currentParagraph = currentParagraph.slice(0, -1) + lineText;
+                } else {
+                  currentParagraph += ' ' + lineText;
+                }
+              } else {
+                currentParagraph = lineText;
+              }
             }
             
             lastLineY = line.y;
@@ -1217,14 +1244,14 @@
             paragraphs.push(currentParagraph.trim());
           }
           
-          // Filter out very short paragraphs (likely headers, footers, etc.)
+          // Clean up paragraphs - only remove excessive whitespace, keep all content
           const cleanParas = paragraphs
             .map(p => p.replace(/\s+/g, ' ').trim())
-            .filter(p => p.length > 30);
+            .filter(p => p.length > 0); // Keep everything, even short text
           
           pageData.push({
             pageNum: i,
-            paragraphs: cleanParas.length > 0 ? cleanParas : ['No paragraphs found']
+            paragraphs: cleanParas.length > 0 ? cleanParas : ['No text found on this page']
           });
         }
         
@@ -1287,6 +1314,7 @@
               <button class="page-btn" onclick="deselectAllInPage(${page.pageNum}, ${pageStartIdx}, ${globalIndex})">Deselect All</button>
               <button class="page-btn" onclick="copySelectedInPage(${pageStartIdx}, ${globalIndex})">Copy Selected</button>
               <button class="page-btn" style="background: #4CAF50;" onclick="copyAllInPage(${pageStartIdx}, ${globalIndex}, event)">📋 Copy All Page</button>
+              <button class="page-btn" style="background: #9C27B0;" onclick="copyPageToNotes('${pageKey}', ${pageStartIdx}, ${globalIndex}, ${page.pageNum})">📝 Copy to Notes</button>
             </div>
             <div class="page-notes">
               <div class="notes-header">
@@ -1853,6 +1881,47 @@
         }
         showCopyFeedback(event.target);
       });
+    }
+    
+    async function copyPageToNotes(pageKey, startIdx, endIdx, pageNum) {
+      const pageTexts = [];
+      
+      for (let i = startIdx; i < endIdx; i++) {
+        pageTexts.push(allParagraphs[i]);
+      }
+      
+      const combinedText = pageTexts.join('\n\n');
+      
+      // Get the notes div for this page
+      const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
+      if (notesDiv) {
+        // Set the text content
+        notesDiv.textContent = combinedText;
+        
+        // Save to database
+        pageNotes[pageKey] = combinedText;
+        await savePageNote(pageKey, combinedText);
+        
+        // Show saved indicator
+        const savedIndicator = document.getElementById(`saved-${pageNum}`);
+        if (savedIndicator) {
+          savedIndicator.classList.add('show');
+          setTimeout(() => {
+            savedIndicator.classList.remove('show');
+          }, 2000);
+        }
+        
+        // Show feedback on button
+        const button = event.target;
+        const originalText = button.textContent;
+        const originalBg = button.style.background;
+        button.textContent = '✓ Copied to Notes!';
+        button.style.background = '#4CAF50';
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.style.background = originalBg;
+        }, 2000);
+      }
     }
     
     function showCopyFeedback(button) {
