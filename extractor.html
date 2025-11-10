@@ -2625,11 +2625,12 @@
         currentSpeech.lang = 'en-US';
       }
       
-      // Boundary events
+      // Use boundary events for accurate highlighting
       currentSpeech.onboundary = (event) => {
         if (event.name === 'word' && event.charIndex !== undefined) {
           if (!boundarySupported) {
             boundarySupported = true;
+            console.log('Using boundary events for accurate highlighting');
             if (highlightInterval) {
               clearInterval(highlightInterval);
               highlightInterval = null;
@@ -2650,6 +2651,7 @@
           for (let i = 0; i < remainingWords.length; i++) {
             if (localCharCount >= event.charIndex) {
               pausedAtWord = wordIndex + i;
+              currentWordIndex = wordIndex + i;
               break;
             }
             localCharCount += remainingWords[i].length + 1;
@@ -2657,17 +2659,20 @@
         }
       };
       
-      // Start event
+      // Start event - fallback timer in case boundary events don't work
       currentSpeech.onstart = () => {
-        const baseWPM = 200; // Increased from 150 for faster highlighting
+        const baseWPM = 160; // Matches typical speech synthesis rate
         const adjustedWPM = baseWPM * speed;
         const avgWordDuration = (60000 / adjustedWPM);
+        
+        console.log(`Resume highlighting: ${adjustedWPM} WPM, ${avgWordDuration.toFixed(0)}ms per word`);
         
         if (allWords.length > currentWordIndex) {
           highlightWordByIndex(notesDiv, currentWordIndex, allWords);
           currentWordIndex++;
         }
         
+        // Fallback timer - will be stopped if boundary events work
         highlightInterval = setInterval(() => {
           if (!boundarySupported && currentWordIndex < allWords.length) {
             highlightWordByIndex(notesDiv, currentWordIndex, allWords);
@@ -2955,13 +2960,13 @@
         forwardBtn.style.display = 'flex';
       }
       
-      // Try to use boundary events (more accurate)
+      // Use boundary events for accurate highlighting that matches actual speech
       currentSpeech.onboundary = (event) => {
         if (event.name === 'word' && event.charIndex !== undefined) {
+          // Boundary events work - stop the fallback timer
           if (!boundarySupported) {
             boundarySupported = true;
             console.log('Using boundary events for accurate highlighting');
-            // Clear the fallback interval once we know boundary events work
             if (highlightInterval) {
               clearInterval(highlightInterval);
               highlightInterval = null;
@@ -2975,6 +2980,7 @@
           for (let i = 0; i < words.length; i++) {
             if (charCount >= event.charIndex) {
               pausedAtWord = i;
+              currentWordIndex = i;
               break;
             }
             charCount += words[i].length + 1; // +1 for space
@@ -2987,8 +2993,8 @@
         console.log('Speech started');
         
         // Calculate word duration based on actual speech rate
-        // Average speaking rate is 150 WPM, adjusted by speed setting
-        const baseWPM = 200; // Base words per minute - increased for faster highlighting
+        // Browser speech synthesis typically speaks at 150-180 WPM at 1x speed
+        const baseWPM = 160; // Base words per minute - matches typical speech synthesis
         const adjustedWPM = baseWPM * speed; // Adjust for speed setting
         const avgWordDuration = (60000 / adjustedWPM); // Milliseconds per word
         
@@ -3001,14 +3007,13 @@
           pausedAtWord = 0;
         }
         
-        // Use fallback only if boundary events don't work
+        // Fallback timer - will be stopped if boundary events work
         highlightInterval = setInterval(() => {
           if (!boundarySupported && currentWordIndex < words.length) {
             highlightWordByIndex(notesDiv, currentWordIndex, words);
             pausedAtWord = currentWordIndex;
             currentWordIndex++;
           } else if (boundarySupported && highlightInterval) {
-            // Boundary events are working, clear the interval
             clearInterval(highlightInterval);
             highlightInterval = null;
           }
