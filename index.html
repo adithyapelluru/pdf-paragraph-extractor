@@ -1390,7 +1390,7 @@
       // Handle speech start - begin highlighting when speech actually starts
       currentSpeech.onstart = () => {
         // Fallback: timer-based highlighting (faster timing for better sync)
-        const avgWordDuration = (60000 / (180 * speed)); // 180 WPM for faster highlighting
+        const avgWordDuration = (60000 / (220 * speed)); // 220 WPM for faster highlighting
         
         // Start highlighting with first word
         if (words.length > 0) {

@@ -2659,7 +2659,7 @@
       
       // Start event
       currentSpeech.onstart = () => {
-        const baseWPM = 150;
+        const baseWPM = 200; // Increased from 150 for faster highlighting
         const adjustedWPM = baseWPM * speed;
         const avgWordDuration = (60000 / adjustedWPM);
         
@@ -2988,7 +2988,7 @@
         
         // Calculate word duration based on actual speech rate
         // Average speaking rate is 150 WPM, adjusted by speed setting
-        const baseWPM = 150; // Base words per minute
+        const baseWPM = 200; // Base words per minute - increased for faster highlighting
         const adjustedWPM = baseWPM * speed; // Adjust for speed setting
         const avgWordDuration = (60000 / adjustedWPM); // Milliseconds per word
         
