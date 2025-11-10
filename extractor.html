@@ -1654,9 +1654,9 @@
             <div class="page-actions">
               <button class="page-btn" onclick="selectAllInPage(${page.pageNum}, ${pageStartIdx}, ${globalIndex})">Select All</button>
               <button class="page-btn" onclick="deselectAllInPage(${page.pageNum}, ${pageStartIdx}, ${globalIndex})">Deselect All</button>
-              <button class="page-btn" onclick="copySelectedInPage(${pageStartIdx}, ${globalIndex})">Copy Selected</button>
-              <button class="page-btn" style="background: #4CAF50;" onclick="copyAllInPage(${pageStartIdx}, ${globalIndex}, event)">📋 Copy All Page</button>
-              <button class="page-btn" style="background: #9C27B0;" onclick="copyPageToNotes('${pageKey}', ${pageStartIdx}, ${globalIndex}, ${page.pageNum})">📝 Copy to Notes</button>
+              <button class="page-btn" onclick="copySelectedInPage(event, ${pageStartIdx}, ${globalIndex})">Copy Selected</button>
+              <button class="page-btn" style="background: #4CAF50;" onclick="copyAllInPage(event, ${pageStartIdx}, ${globalIndex})">📋 Copy All Page</button>
+              <button class="page-btn" style="background: #9C27B0;" onclick="copyPageToNotes(event, '${pageKey}', ${pageStartIdx}, ${globalIndex}, ${page.pageNum})">📝 Copy to Notes</button>
             </div>
             <div class="page-notes">
               <div class="notes-header">
@@ -2460,7 +2460,7 @@
       }
     }
     
-    async function copySelectedInPage(startIdx, endIdx) {
+    async function copySelectedInPage(event, startIdx, endIdx) {
       const selectedTexts = [];
       
       for (let i = startIdx; i < endIdx; i++) {
@@ -2487,7 +2487,7 @@
       });
     }
     
-    async function copyAllInPage(startIdx, endIdx, event) {
+    async function copyAllInPage(event, startIdx, endIdx) {
       const pageTexts = [];
       
       for (let i = startIdx; i < endIdx; i++) {
@@ -2507,7 +2507,7 @@
       });
     }
     
-    async function copyPageToNotes(pageKey, startIdx, endIdx, pageNum) {
+    async function copyPageToNotes(event, pageKey, startIdx, endIdx, pageNum) {
       const pageTexts = [];
       
       for (let i = startIdx; i < endIdx; i++) {
