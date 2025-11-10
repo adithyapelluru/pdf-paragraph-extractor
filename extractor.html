@@ -395,9 +395,133 @@
       background: #7B1FA2;
     }
     
+    .notes-btn.fullscreen {
+      background: #00BCD4;
+    }
+    
+    .notes-btn.fullscreen:hover {
+      background: #0097A7;
+    }
+    
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.7; }
+    }
+    
+    /* Fullscreen modal */
+    .notes-fullscreen-modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 10000;
+      padding: 20px;
+      overflow: auto;
+    }
+    
+    .notes-fullscreen-modal.show {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .fullscreen-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 10px 10px 0 0;
+      color: white;
+      flex-shrink: 0;
+    }
+    
+    .fullscreen-title {
+      font-size: 20px;
+      font-weight: bold;
+    }
+    
+    .fullscreen-close {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+    }
+    
+    .fullscreen-close:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: rotate(90deg);
+    }
+    
+    .fullscreen-content {
+      flex: 1;
+      background: white;
+      padding: 30px;
+      border-radius: 0 0 10px 10px;
+      overflow: auto;
+      min-height: 0;
+    }
+    
+    .fullscreen-notes {
+      width: 100%;
+      min-height: 100%;
+      padding: 20px;
+      border: 2px solid #667eea;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 18px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      background: #f8f9ff;
+      outline: none;
+      resize: none;
+    }
+    
+    .fullscreen-notes:empty:before {
+      content: attr(data-placeholder);
+      color: #999;
+    }
+    
+    @media (max-width: 768px) {
+      .notes-fullscreen-modal {
+        padding: 0;
+      }
+      
+      .fullscreen-header {
+        border-radius: 0;
+        padding: 12px 15px;
+      }
+      
+      .fullscreen-title {
+        font-size: 16px;
+      }
+      
+      .fullscreen-close {
+        width: 35px;
+        height: 35px;
+        font-size: 20px;
+      }
+      
+      .fullscreen-content {
+        padding: 15px;
+        border-radius: 0;
+      }
+      
+      .fullscreen-notes {
+        font-size: 16px;
+        padding: 15px;
+      }
     }
     
     .font-size-controls {
@@ -841,6 +965,23 @@
   <button class="back-floating-btn" onclick="goBackToManager()" title="Back to File Manager">
     ⬅️
   </button>
+  
+  <!-- Fullscreen Notes Modal -->
+  <div class="notes-fullscreen-modal" id="fullscreenModal">
+    <div class="fullscreen-header">
+      <div class="fullscreen-title" id="fullscreenTitle">Notes</div>
+      <button class="fullscreen-close" onclick="closeFullscreenNotes()">✕</button>
+    </div>
+    <div class="fullscreen-content">
+      <div 
+        class="fullscreen-notes" 
+        contenteditable="true"
+        data-placeholder="Add your notes here..."
+        id="fullscreenNotesContent"
+        oninput="handleFullscreenNoteChange()"
+      ></div>
+    </div>
+  </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
@@ -1334,6 +1475,9 @@
                       A+
                     </button>
                   </div>
+                  <button class="notes-btn fullscreen" onclick="openFullscreenNotes('${pageKey}', ${page.pageNum})" title="View in fullscreen">
+                    ⛶ Fullscreen
+                  </button>
                   <span class="notes-saved" id="saved-${page.pageNum}">✓ Saved</span>
                 </div>
               </div>
@@ -1497,7 +1641,18 @@
     
     function clearHighlights(notesDiv) {
       if (originalText) {
-        notesDiv.textContent = originalText;
+        // Clear highlights in both places
+        const modal = document.getElementById('fullscreenModal');
+        const fullscreenDiv = document.getElementById('fullscreenNotesContent');
+        
+        if (notesDiv) {
+          notesDiv.textContent = originalText;
+        }
+        
+        if (modal && modal.classList.contains('show') && fullscreenDiv) {
+          fullscreenDiv.textContent = originalText;
+        }
+        
         originalText = '';
       }
     }
@@ -1537,6 +1692,14 @@
     }
     
     function highlightTextAtPosition(notesDiv, charIndex, text) {
+      // Use fullscreen modal if open
+      const modal = document.getElementById('fullscreenModal');
+      const targetDiv = (modal && modal.classList.contains('show')) 
+        ? document.getElementById('fullscreenNotesContent') 
+        : notesDiv;
+      
+      if (!targetDiv) return;
+      
       // Find word boundaries around the character position
       let wordStart = charIndex;
       let wordEnd = charIndex;
@@ -1556,23 +1719,31 @@
       const word = escapeHtml(text.substring(wordStart, wordEnd));
       const after = escapeHtml(text.substring(wordEnd));
       
-      notesDiv.innerHTML = before + '<span class="highlight-word">' + word + '</span>' + after;
+      targetDiv.innerHTML = before + '<span class="highlight-word">' + word + '</span>' + after;
       
       // Auto-scroll to keep highlighted word visible
-      scrollToHighlight(notesDiv);
+      scrollToHighlight(targetDiv);
     }
     
     function highlightWordByIndex(notesDiv, wordIndex, words) {
+      // Use fullscreen modal if open
+      const modal = document.getElementById('fullscreenModal');
+      const targetDiv = (modal && modal.classList.contains('show')) 
+        ? document.getElementById('fullscreenNotesContent') 
+        : notesDiv;
+      
+      if (!targetDiv) return;
+      
       const htmlParts = words.map((word, idx) => {
         if (idx === wordIndex) {
           return '<span class="highlight-word">' + escapeHtml(word) + '</span>';
         }
         return escapeHtml(word);
       });
-      notesDiv.innerHTML = htmlParts.join(' ');
+      targetDiv.innerHTML = htmlParts.join(' ');
       
       // Auto-scroll to keep highlighted word visible
-      scrollToHighlight(notesDiv);
+      scrollToHighlight(targetDiv);
     }
     
     function toggleSpeech(pageKey, pageNum) {
@@ -2054,6 +2225,122 @@
     function goBackToManager() {
       window.location.href = 'upload.html';
     }
+    
+    // Fullscreen notes functionality
+    let currentFullscreenPageKey = null;
+    let currentFullscreenPageNum = null;
+    
+    function openFullscreenNotes(pageKey, pageNum) {
+      const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
+      const modal = document.getElementById('fullscreenModal');
+      const fullscreenContent = document.getElementById('fullscreenNotesContent');
+      const fullscreenTitle = document.getElementById('fullscreenTitle');
+      
+      if (!notesDiv || !modal || !fullscreenContent) return;
+      
+      // Store current page info
+      currentFullscreenPageKey = pageKey;
+      currentFullscreenPageNum = pageNum;
+      
+      // Copy content to fullscreen (preserve HTML if speech is active)
+      if (currentSpeakingPage === pageNum && originalText) {
+        // Speech is active, copy HTML to preserve highlighting
+        fullscreenContent.innerHTML = notesDiv.innerHTML;
+      } else {
+        fullscreenContent.textContent = notesDiv.textContent;
+      }
+      
+      fullscreenTitle.textContent = `Notes - Page ${pageNum}`;
+      
+      // Show modal
+      modal.classList.add('show');
+      
+      // Focus on content
+      setTimeout(() => {
+        fullscreenContent.focus();
+      }, 100);
+      
+      // Prevent body scroll
+      document.body.style.overflow = 'hidden';
+    }
+    
+    function closeFullscreenNotes() {
+      const modal = document.getElementById('fullscreenModal');
+      const fullscreenContent = document.getElementById('fullscreenNotesContent');
+      
+      if (!modal || !fullscreenContent) return;
+      
+      // Save content back to original notes
+      if (currentFullscreenPageKey && currentFullscreenPageNum) {
+        const notesDiv = document.querySelector(`[data-page-key="${currentFullscreenPageKey}"]`);
+        if (notesDiv) {
+          // If speech is active, preserve HTML structure
+          if (currentSpeakingPage === currentFullscreenPageNum && originalText) {
+            notesDiv.innerHTML = fullscreenContent.innerHTML;
+          } else {
+            notesDiv.textContent = fullscreenContent.textContent;
+          }
+          
+          // Trigger save (only if not currently speaking)
+          if (currentSpeakingPage !== currentFullscreenPageNum) {
+            handleNoteChange(currentFullscreenPageKey, currentFullscreenPageNum);
+          }
+        }
+      }
+      
+      // Hide modal
+      modal.classList.remove('show');
+      
+      // Restore body scroll
+      document.body.style.overflow = '';
+      
+      // Clear current page info
+      currentFullscreenPageKey = null;
+      currentFullscreenPageNum = null;
+    }
+    
+    let fullscreenNoteTimeout;
+    function handleFullscreenNoteChange() {
+      if (!currentFullscreenPageKey || !currentFullscreenPageNum) return;
+      
+      const fullscreenContent = document.getElementById('fullscreenNotesContent');
+      const notesDiv = document.querySelector(`[data-page-key="${currentFullscreenPageKey}"]`);
+      
+      if (!fullscreenContent || !notesDiv) return;
+      
+      // Don't sync back if speech is active (to avoid breaking highlighting)
+      if (currentSpeakingPage !== currentFullscreenPageNum) {
+        // Update original notes in real-time
+        notesDiv.textContent = fullscreenContent.textContent;
+      }
+      
+      // Debounced save
+      clearTimeout(fullscreenNoteTimeout);
+      fullscreenNoteTimeout = setTimeout(async () => {
+        const note = fullscreenContent.textContent;
+        pageNotes[currentFullscreenPageKey] = note;
+        await savePageNote(currentFullscreenPageKey, note);
+        
+        // Show saved indicator on original notes
+        const savedIndicator = document.getElementById(`saved-${currentFullscreenPageNum}`);
+        if (savedIndicator) {
+          savedIndicator.classList.add('show');
+          setTimeout(() => {
+            savedIndicator.classList.remove('show');
+          }, 2000);
+        }
+      }, 500);
+    }
+    
+    // Close fullscreen with Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.getElementById('fullscreenModal');
+        if (modal && modal.classList.contains('show')) {
+          closeFullscreenNotes();
+        }
+      }
+    });
   </script>
 </body>
 </html>
