@@ -2354,6 +2354,9 @@
     let allWords = [];
     let currentSpeed = 1.0;
     
+    // Detect if we're on mobile
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
     function updateSpeedDisplay(pageNum) {
       const slider = document.getElementById(`speed-${pageNum}`);
       const display = document.getElementById(`speed-value-${pageNum}`);
@@ -2625,39 +2628,45 @@
         currentSpeech.lang = 'en-US';
       }
       
-      // Use boundary events for accurate highlighting
-      currentSpeech.onboundary = (event) => {
-        if (event.name === 'word' && event.charIndex !== undefined) {
-          if (!boundarySupported) {
-            boundarySupported = true;
-            console.log('Using boundary events for accurate highlighting');
-            if (highlightInterval) {
-              clearInterval(highlightInterval);
-              highlightInterval = null;
+      // Use boundary events only on desktop
+      if (!isMobile) {
+        currentSpeech.onboundary = (event) => {
+          if (event.name === 'word' && event.charIndex !== undefined) {
+            if (!boundarySupported) {
+              boundarySupported = true;
+              console.log('Using boundary events for accurate highlighting');
+              if (highlightInterval) {
+                clearInterval(highlightInterval);
+                highlightInterval = null;
+              }
+            }
+            
+            // Calculate position in full text
+            let charCount = 0;
+            for (let i = 0; i < wordIndex; i++) {
+              charCount += allWords[i].length + 1;
+            }
+            charCount += event.charIndex;
+            
+            highlightTextAtPosition(notesDiv, charCount, originalText);
+            
+            // Track word position
+            let localCharCount = 0;
+            for (let i = 0; i < remainingWords.length; i++) {
+              if (localCharCount >= event.charIndex) {
+                pausedAtWord = wordIndex + i;
+                currentWordIndex = wordIndex + i;
+                break;
+              }
+              localCharCount += remainingWords[i].length + 1;
             }
           }
-          
-          // Calculate position in full text
-          let charCount = 0;
-          for (let i = 0; i < wordIndex; i++) {
-            charCount += allWords[i].length + 1;
-          }
-          charCount += event.charIndex;
-          
-          highlightTextAtPosition(notesDiv, charCount, originalText);
-          
-          // Track word position
-          let localCharCount = 0;
-          for (let i = 0; i < remainingWords.length; i++) {
-            if (localCharCount >= event.charIndex) {
-              pausedAtWord = wordIndex + i;
-              currentWordIndex = wordIndex + i;
-              break;
-            }
-            localCharCount += remainingWords[i].length + 1;
-          }
-        }
-      };
+        };
+      } else {
+        // Mobile: disable boundary events
+        currentSpeech.onboundary = null;
+        console.log('Mobile detected: using timer-based highlighting for resume');
+      }
       
       // Start event - fallback timer in case boundary events don't work
       currentSpeech.onstart = () => {
@@ -2672,13 +2681,13 @@
           currentWordIndex++;
         }
         
-        // Fallback timer - will be stopped if boundary events work
+        // Timer-based highlighting (always used on mobile, fallback on desktop)
         highlightInterval = setInterval(() => {
-          if (!boundarySupported && currentWordIndex < allWords.length) {
+          if ((isMobile || !boundarySupported) && currentWordIndex < allWords.length) {
             highlightWordByIndex(notesDiv, currentWordIndex, allWords);
             pausedAtWord = currentWordIndex;
             currentWordIndex++;
-          } else if (boundarySupported && highlightInterval) {
+          } else if (!isMobile && boundarySupported && highlightInterval) {
             clearInterval(highlightInterval);
             highlightInterval = null;
           }
@@ -2960,33 +2969,39 @@
         forwardBtn.style.display = 'flex';
       }
       
-      // Use boundary events for accurate highlighting that matches actual speech
-      currentSpeech.onboundary = (event) => {
-        if (event.name === 'word' && event.charIndex !== undefined) {
-          // Boundary events work - stop the fallback timer
-          if (!boundarySupported) {
-            boundarySupported = true;
-            console.log('Using boundary events for accurate highlighting');
-            if (highlightInterval) {
-              clearInterval(highlightInterval);
-              highlightInterval = null;
+      // Use boundary events only on desktop (mobile browsers often don't support them well)
+      if (!isMobile) {
+        currentSpeech.onboundary = (event) => {
+          if (event.name === 'word' && event.charIndex !== undefined) {
+            // Boundary events work - stop the fallback timer
+            if (!boundarySupported) {
+              boundarySupported = true;
+              console.log('Using boundary events for accurate highlighting');
+              if (highlightInterval) {
+                clearInterval(highlightInterval);
+                highlightInterval = null;
+              }
+            }
+            
+            highlightTextAtPosition(notesDiv, event.charIndex, noteText);
+            
+            // Track word position for pause/resume
+            let charCount = 0;
+            for (let i = 0; i < words.length; i++) {
+              if (charCount >= event.charIndex) {
+                pausedAtWord = i;
+                currentWordIndex = i;
+                break;
+              }
+              charCount += words[i].length + 1; // +1 for space
             }
           }
-          
-          highlightTextAtPosition(notesDiv, event.charIndex, noteText);
-          
-          // Track word position for pause/resume
-          let charCount = 0;
-          for (let i = 0; i < words.length; i++) {
-            if (charCount >= event.charIndex) {
-              pausedAtWord = i;
-              currentWordIndex = i;
-              break;
-            }
-            charCount += words[i].length + 1; // +1 for space
-          }
-        }
-      };
+        };
+      } else {
+        // Mobile: disable boundary events, use timer only
+        currentSpeech.onboundary = null;
+        console.log('Mobile detected: using timer-based highlighting');
+      }
       
       // Handle speech start - begin highlighting when speech actually starts
       currentSpeech.onstart = () => {
@@ -3007,13 +3022,13 @@
           pausedAtWord = 0;
         }
         
-        // Fallback timer - will be stopped if boundary events work
+        // Timer-based highlighting (always used on mobile, fallback on desktop)
         highlightInterval = setInterval(() => {
-          if (!boundarySupported && currentWordIndex < words.length) {
+          if ((isMobile || !boundarySupported) && currentWordIndex < words.length) {
             highlightWordByIndex(notesDiv, currentWordIndex, words);
             pausedAtWord = currentWordIndex;
             currentWordIndex++;
-          } else if (boundarySupported && highlightInterval) {
+          } else if (!isMobile && boundarySupported && highlightInterval) {
             clearInterval(highlightInterval);
             highlightInterval = null;
           }
