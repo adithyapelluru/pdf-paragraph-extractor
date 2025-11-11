@@ -1671,7 +1671,8 @@
   <div class="notes-fullscreen-modal" id="fullscreenModal">
     <div class="fullscreen-header">
       <div class="fullscreen-title" id="fullscreenTitle">Notes</div>
-      <div style="display: flex; gap: 10px; align-items: center;">
+      <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;" id="fullscreen-controls">
+        <!-- Speaker controls will be synced from the page controls -->
         <button class="notes-btn edit-toggle" id="fullscreen-edit-toggle" onclick="toggleFullscreenEdit()" title="Enable/Disable editing">
           🔒 Locked
         </button>
@@ -2364,13 +2365,26 @@
     }
     
     // Font size control for notes
-    function changeFontSize(pageKey, delta) {
-      const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
-      if (!notesDiv) return;
+    function changeFontSize(pageKey, delta, isFullscreen = false) {
+      // Use fullscreen content if in fullscreen mode
+      const modal = document.getElementById('fullscreenModal');
+      const targetDiv = (modal && modal.classList.contains('show')) 
+        ? document.getElementById('fullscreenNotesContent')
+        : document.querySelector(`[data-page-key="${pageKey}"]`);
       
-      const currentSize = parseInt(window.getComputedStyle(notesDiv).fontSize);
+      if (!targetDiv) return;
+      
+      const currentSize = parseInt(window.getComputedStyle(targetDiv).fontSize);
       const newSize = Math.max(10, Math.min(24, currentSize + delta));
-      notesDiv.style.fontSize = newSize + 'px';
+      targetDiv.style.fontSize = newSize + 'px';
+      
+      // Also update the regular notes div if in fullscreen
+      if (modal && modal.classList.contains('show')) {
+        const notesDiv = document.querySelector(`[data-page-key="${pageKey}"]`);
+        if (notesDiv) {
+          notesDiv.style.fontSize = newSize + 'px';
+        }
+      }
     }
     
     // Toggle notes editing
@@ -4282,11 +4296,95 @@
       if (currentSpeakingPage === pageNum && originalText) {
         // Speech is active, copy HTML to preserve highlighting
         fullscreenContent.innerHTML = notesDiv.innerHTML;
+        
+        // Switch highlighting target to fullscreen
+        // The speech will continue but highlighting will now appear in fullscreen
+        console.log('Speech continuing in fullscreen mode');
       } else {
         fullscreenContent.textContent = notesDiv.textContent;
       }
       
       fullscreenTitle.textContent = `Notes - Page ${pageNum}`;
+      
+      // Clone speaker controls from the page to fullscreen
+      const fullscreenControls = document.getElementById('fullscreen-controls');
+      const pageNotesSection = notesDiv.closest('.page-notes');
+      
+      if (fullscreenControls && pageNotesSection) {
+        // Find the notes actions and speed control
+        const notesActions = pageNotesSection.querySelector('.notes-actions');
+        const speedControl = pageNotesSection.querySelector('.speed-control');
+        
+        // Clear existing speaker controls (keep edit and close buttons)
+        const editBtn = fullscreenControls.querySelector('#fullscreen-edit-toggle');
+        const closeBtn = fullscreenControls.querySelector('.fullscreen-close');
+        fullscreenControls.innerHTML = '';
+        
+        // Clone speaker controls
+        if (notesActions) {
+          const clonedActions = notesActions.cloneNode(true);
+          // Update IDs and onclick handlers to work with the same page
+          clonedActions.querySelectorAll('button').forEach(btn => {
+            const oldId = btn.id;
+            if (oldId) {
+              btn.id = 'fullscreen-' + oldId;
+              // Keep the same onclick that references the page number
+            }
+            
+            // Remove fullscreen button from fullscreen view
+            if (btn.classList.contains('fullscreen')) {
+              btn.remove();
+            }
+            
+            // Remove edit toggle from cloned actions (we'll use the original one)
+            if (btn.classList.contains('edit-toggle')) {
+              btn.remove();
+            }
+            
+            // Fix font control buttons to work with fullscreen
+            if (btn.classList.contains('font-control')) {
+              const originalOnclick = btn.getAttribute('onclick');
+              if (originalOnclick) {
+                // Extract pageKey and delta from the original onclick
+                const match = originalOnclick.match(/changeFontSize\('([^']+)',\s*(-?\d+)\)/);
+                if (match) {
+                  const pageKey = match[1];
+                  const delta = match[2];
+                  // Set new onclick that passes true for fullscreen
+                  btn.setAttribute('onclick', `changeFontSize('${pageKey}', ${delta}, true)`);
+                }
+              }
+            }
+          });
+          fullscreenControls.appendChild(clonedActions);
+        }
+        
+        // Add speed control to fullscreen content
+        if (speedControl) {
+          const clonedSpeed = speedControl.cloneNode(true);
+          // Update IDs
+          clonedSpeed.querySelectorAll('[id]').forEach(el => {
+            el.id = 'fullscreen-' + el.id;
+          });
+          // Sync the slider value
+          const originalSlider = speedControl.querySelector('.speed-slider');
+          const clonedSlider = clonedSpeed.querySelector('.speed-slider');
+          if (originalSlider && clonedSlider) {
+            clonedSlider.value = originalSlider.value;
+            clonedSlider.oninput = function() {
+              originalSlider.value = this.value;
+              originalSlider.dispatchEvent(new Event('input'));
+            };
+          }
+          // Insert speed control at the top of fullscreen content
+          const fullscreenContentParent = fullscreenContent.parentElement;
+          fullscreenContentParent.insertBefore(clonedSpeed, fullscreenContent);
+        }
+        
+        // Re-add edit and close buttons
+        if (editBtn) fullscreenControls.appendChild(editBtn);
+        if (closeBtn) fullscreenControls.appendChild(closeBtn);
+      }
       
       // Show modal
       modal.classList.add('show');
@@ -4350,9 +4448,437 @@
       // Restore body scroll
       document.body.style.overflow = '';
       
+      // Copy content back to regular notes if speech is active
+      if (currentFullscreenPageKey && currentSpeakingPage === currentFullscreenPageNum) {
+        const regularNotesDiv = document.querySelector(`[data-page-key="${currentFullscreenPageKey}"]`);
+        if (regularNotesDiv && fullscreenContent) {
+          regularNotesDiv.innerHTML = fullscreenContent.innerHTML;
+        }
+      }
+      
+      // Remove cloned speed control if it exists
+      const clonedSpeed = modal.querySelector('.fullscreen-content > .speed-control');
+      if (clonedSpeed) {
+        clonedSpeed.remove();
+      }
+      
       // Clear current page info
       currentFullscreenPageKey = null;
       currentFullscreenPageNum = null;
+      
+      // Speech continues playing in regular view - don't stop it
+    }
+    
+    // Fullscreen speech controls
+    function updateFullscreenSpeedDisplay() {
+      const slider = document.getElementById('fullscreen-speed-slider');
+      const display = document.getElementById('fullscreen-speed-value');
+      if (slider && display) {
+        display.textContent = slider.value + 'x';
+      }
+    }
+    
+    function toggleFullscreenSpeech() {
+      const fullscreenContent = document.getElementById('fullscreenNotesContent');
+      const speakBtn = document.getElementById('fullscreen-speak-btn');
+      const rewindBtn = document.getElementById('fullscreen-rewind-btn');
+      const forwardBtn = document.getElementById('fullscreen-forward-btn');
+      const stopBtn = document.getElementById('fullscreen-stop-btn');
+      const speedSlider = document.getElementById('fullscreen-speed-slider');
+      
+      if (!fullscreenContent || !speakBtn) return;
+      
+      const noteText = fullscreenContent.textContent.trim();
+      
+      // If currently speaking, stop it
+      if (currentSpeakingPage === 'fullscreen' && currentSpeech) {
+        window.speechSynthesis.cancel();
+        clearInterval(highlightInterval);
+        speakBtn.classList.remove('speaking');
+        speakBtn.innerHTML = '🔊 Speak';
+        if (rewindBtn) rewindBtn.style.display = 'none';
+        if (forwardBtn) forwardBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'none';
+        clearHighlights(fullscreenContent);
+        currentSpeech = null;
+        currentSpeakingPage = null;
+        return;
+      }
+      
+      // Stop any other speech
+      if (currentSpeech) {
+        window.speechSynthesis.cancel();
+        clearInterval(highlightInterval);
+        currentSpeech = null;
+        currentSpeakingPage = null;
+      }
+      
+      if (!noteText) {
+        alert('No notes to read. Please add some notes first.');
+        return;
+      }
+      
+      if (!('speechSynthesis' in window)) {
+        alert('Text-to-speech is not supported in your browser.');
+        return;
+      }
+      
+      // Store original text
+      originalText = noteText;
+      
+      // Split text into words
+      const words = noteText.split(/\s+/);
+      let currentWordIndex = 0;
+      let boundarySupported = false;
+      
+      // Create speech
+      currentSpeech = new SpeechSynthesisUtterance(noteText);
+      currentSpeakingPage = 'fullscreen';
+      
+      // Configure speech
+      const speed = parseFloat(speedSlider.value);
+      currentSpeech.rate = speed;
+      currentSpeech.pitch = 1.0;
+      currentSpeech.volume = 1.0;
+      
+      // Update button state
+      speakBtn.classList.add('speaking');
+      speakBtn.innerHTML = '⏸️ Stop';
+      if (rewindBtn) rewindBtn.style.display = 'flex';
+      if (forwardBtn) forwardBtn.style.display = 'flex';
+      if (stopBtn) stopBtn.style.display = 'flex';
+      
+      // Use boundary events only on desktop
+      if (!isMobile) {
+        currentSpeech.onboundary = (event) => {
+          if (event.name === 'word' && event.charIndex !== undefined) {
+            if (!boundarySupported) {
+              boundarySupported = true;
+              console.log('Using boundary events for fullscreen highlighting');
+              if (highlightInterval) {
+                clearInterval(highlightInterval);
+                highlightInterval = null;
+              }
+            }
+            
+            highlightTextAtPosition(fullscreenContent, event.charIndex, noteText);
+            
+            let charCount = 0;
+            for (let i = 0; i < words.length; i++) {
+              if (charCount >= event.charIndex) {
+                pausedAtWord = i;
+                currentWordIndex = i;
+                break;
+              }
+              charCount += words[i].length + 1;
+            }
+          }
+        };
+      } else {
+        currentSpeech.onboundary = null;
+        console.log('Mobile: using timer-based highlighting for fullscreen');
+      }
+      
+      // Handle speech start
+      currentSpeech.onstart = () => {
+        const baseWPM = 160;
+        const adjustedWPM = baseWPM * speed;
+        const avgWordDuration = (60000 / adjustedWPM);
+        
+        console.log(`Fullscreen highlighting: ${adjustedWPM} WPM, ${avgWordDuration.toFixed(0)}ms per word`);
+        
+        if (words.length > 0) {
+          highlightWordByIndex(fullscreenContent, 0, words);
+          currentWordIndex = 1;
+          pausedAtWord = 0;
+        }
+        
+        highlightInterval = setInterval(() => {
+          if ((isMobile || !boundarySupported) && currentWordIndex < words.length) {
+            highlightWordByIndex(fullscreenContent, currentWordIndex, words);
+            pausedAtWord = currentWordIndex;
+            currentWordIndex++;
+          } else if (!isMobile && boundarySupported && highlightInterval) {
+            clearInterval(highlightInterval);
+            highlightInterval = null;
+          }
+        }, avgWordDuration);
+      };
+      
+      // Handle speech end
+      currentSpeech.onend = () => {
+        speakBtn.classList.remove('speaking');
+        speakBtn.innerHTML = '🔊 Speak';
+        if (rewindBtn) rewindBtn.style.display = 'none';
+        if (forwardBtn) forwardBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'none';
+        clearInterval(highlightInterval);
+        clearHighlights(fullscreenContent);
+        currentSpeech = null;
+        currentSpeakingPage = null;
+      };
+      
+      // Handle speech error
+      currentSpeech.onerror = (event) => {
+        console.error('Fullscreen speech error:', event);
+        speakBtn.classList.remove('speaking');
+        speakBtn.innerHTML = '🔊 Speak';
+        if (rewindBtn) rewindBtn.style.display = 'none';
+        if (forwardBtn) forwardBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'none';
+        clearInterval(highlightInterval);
+        clearHighlights(fullscreenContent);
+        currentSpeech = null;
+        currentSpeakingPage = null;
+      };
+      
+      // Start speaking
+      window.speechSynthesis.speak(currentSpeech);
+    }
+    
+    function fullscreenStopSpeech() {
+      if (currentSpeech && currentSpeakingPage === 'fullscreen') {
+        window.speechSynthesis.cancel();
+        clearInterval(highlightInterval);
+        
+        const speakBtn = document.getElementById('fullscreen-speak-btn');
+        const rewindBtn = document.getElementById('fullscreen-rewind-btn');
+        const forwardBtn = document.getElementById('fullscreen-forward-btn');
+        const stopBtn = document.getElementById('fullscreen-stop-btn');
+        const fullscreenContent = document.getElementById('fullscreenNotesContent');
+        
+        if (speakBtn) {
+          speakBtn.classList.remove('speaking');
+          speakBtn.innerHTML = '🔊 Speak';
+        }
+        if (rewindBtn) rewindBtn.style.display = 'none';
+        if (forwardBtn) forwardBtn.style.display = 'none';
+        if (stopBtn) stopBtn.style.display = 'none';
+        if (fullscreenContent) clearHighlights(fullscreenContent);
+        
+        currentSpeech = null;
+        currentSpeakingPage = null;
+      }
+    }
+    
+    function fullscreenSkipBackward() {
+      if (!currentSpeech || currentSpeakingPage !== 'fullscreen') return;
+      
+      const fullscreenContent = document.getElementById('fullscreenNotesContent');
+      const speedSlider = document.getElementById('fullscreen-speed-slider');
+      if (!fullscreenContent || !speedSlider) return;
+      
+      const speed = parseFloat(speedSlider.value);
+      const baseWPM = 160;
+      const adjustedWPM = baseWPM * speed;
+      const wordsPerSecond = adjustedWPM / 60;
+      const wordsToSkip = Math.floor(wordsPerSecond * 15);
+      
+      pausedAtWord = Math.max(0, pausedAtWord - wordsToSkip);
+      
+      // Restart from new position
+      window.speechSynthesis.cancel();
+      clearInterval(highlightInterval);
+      
+      const words = originalText.split(/\s+/);
+      const remainingWords = words.slice(pausedAtWord);
+      const remainingText = remainingWords.join(' ');
+      
+      if (remainingText) {
+        currentSpeech = new SpeechSynthesisUtterance(remainingText);
+        currentSpeech.rate = speed;
+        currentSpeech.pitch = 1.0;
+        currentSpeech.volume = 1.0;
+        
+        let currentWordIndex = pausedAtWord;
+        let boundarySupported = false;
+        
+        if (!isMobile) {
+          currentSpeech.onboundary = (event) => {
+            if (event.name === 'word' && event.charIndex !== undefined) {
+              if (!boundarySupported) {
+                boundarySupported = true;
+                if (highlightInterval) {
+                  clearInterval(highlightInterval);
+                  highlightInterval = null;
+                }
+              }
+              
+              let charCount = 0;
+              for (let i = 0; i < pausedAtWord; i++) {
+                charCount += words[i].length + 1;
+              }
+              charCount += event.charIndex;
+              
+              highlightTextAtPosition(fullscreenContent, charCount, originalText);
+              
+              let localCharCount = 0;
+              for (let i = 0; i < remainingWords.length; i++) {
+                if (localCharCount >= event.charIndex) {
+                  pausedAtWord = pausedAtWord + i;
+                  currentWordIndex = pausedAtWord + i;
+                  break;
+                }
+                localCharCount += remainingWords[i].length + 1;
+              }
+            }
+          };
+        } else {
+          currentSpeech.onboundary = null;
+        }
+        
+        currentSpeech.onstart = () => {
+          const avgWordDuration = (60000 / adjustedWPM);
+          
+          if (words.length > currentWordIndex) {
+            highlightWordByIndex(fullscreenContent, currentWordIndex, words);
+            currentWordIndex++;
+          }
+          
+          highlightInterval = setInterval(() => {
+            if ((isMobile || !boundarySupported) && currentWordIndex < words.length) {
+              highlightWordByIndex(fullscreenContent, currentWordIndex, words);
+              pausedAtWord = currentWordIndex;
+              currentWordIndex++;
+            } else if (!isMobile && boundarySupported && highlightInterval) {
+              clearInterval(highlightInterval);
+              highlightInterval = null;
+            }
+          }, avgWordDuration);
+        };
+        
+        currentSpeech.onend = () => {
+          const speakBtn = document.getElementById('fullscreen-speak-btn');
+          const rewindBtn = document.getElementById('fullscreen-rewind-btn');
+          const forwardBtn = document.getElementById('fullscreen-forward-btn');
+          const stopBtn = document.getElementById('fullscreen-stop-btn');
+          
+          if (speakBtn) {
+            speakBtn.classList.remove('speaking');
+            speakBtn.innerHTML = '🔊 Speak';
+          }
+          if (rewindBtn) rewindBtn.style.display = 'none';
+          if (forwardBtn) forwardBtn.style.display = 'none';
+          if (stopBtn) stopBtn.style.display = 'none';
+          
+          clearInterval(highlightInterval);
+          clearHighlights(fullscreenContent);
+          currentSpeech = null;
+          currentSpeakingPage = null;
+        };
+        
+        window.speechSynthesis.speak(currentSpeech);
+      }
+    }
+    
+    function fullscreenSkipForward() {
+      if (!currentSpeech || currentSpeakingPage !== 'fullscreen') return;
+      
+      const fullscreenContent = document.getElementById('fullscreenNotesContent');
+      const speedSlider = document.getElementById('fullscreen-speed-slider');
+      if (!fullscreenContent || !speedSlider) return;
+      
+      const speed = parseFloat(speedSlider.value);
+      const baseWPM = 160;
+      const adjustedWPM = baseWPM * speed;
+      const wordsPerSecond = adjustedWPM / 60;
+      const wordsToSkip = Math.floor(wordsPerSecond * 15);
+      
+      const words = originalText.split(/\s+/);
+      pausedAtWord = Math.min(words.length - 1, pausedAtWord + wordsToSkip);
+      
+      // Restart from new position
+      window.speechSynthesis.cancel();
+      clearInterval(highlightInterval);
+      
+      const remainingWords = words.slice(pausedAtWord);
+      const remainingText = remainingWords.join(' ');
+      
+      if (remainingText) {
+        currentSpeech = new SpeechSynthesisUtterance(remainingText);
+        currentSpeech.rate = speed;
+        currentSpeech.pitch = 1.0;
+        currentSpeech.volume = 1.0;
+        
+        let currentWordIndex = pausedAtWord;
+        let boundarySupported = false;
+        
+        if (!isMobile) {
+          currentSpeech.onboundary = (event) => {
+            if (event.name === 'word' && event.charIndex !== undefined) {
+              if (!boundarySupported) {
+                boundarySupported = true;
+                if (highlightInterval) {
+                  clearInterval(highlightInterval);
+                  highlightInterval = null;
+                }
+              }
+              
+              let charCount = 0;
+              for (let i = 0; i < pausedAtWord; i++) {
+                charCount += words[i].length + 1;
+              }
+              charCount += event.charIndex;
+              
+              highlightTextAtPosition(fullscreenContent, charCount, originalText);
+              
+              let localCharCount = 0;
+              for (let i = 0; i < remainingWords.length; i++) {
+                if (localCharCount >= event.charIndex) {
+                  pausedAtWord = pausedAtWord + i;
+                  currentWordIndex = pausedAtWord + i;
+                  break;
+                }
+                localCharCount += remainingWords[i].length + 1;
+              }
+            }
+          };
+        } else {
+          currentSpeech.onboundary = null;
+        }
+        
+        currentSpeech.onstart = () => {
+          const avgWordDuration = (60000 / adjustedWPM);
+          
+          if (words.length > currentWordIndex) {
+            highlightWordByIndex(fullscreenContent, currentWordIndex, words);
+            currentWordIndex++;
+          }
+          
+          highlightInterval = setInterval(() => {
+            if ((isMobile || !boundarySupported) && currentWordIndex < words.length) {
+              highlightWordByIndex(fullscreenContent, currentWordIndex, words);
+              pausedAtWord = currentWordIndex;
+              currentWordIndex++;
+            } else if (!isMobile && boundarySupported && highlightInterval) {
+              clearInterval(highlightInterval);
+              highlightInterval = null;
+            }
+          }, avgWordDuration);
+        };
+        
+        currentSpeech.onend = () => {
+          const speakBtn = document.getElementById('fullscreen-speak-btn');
+          const rewindBtn = document.getElementById('fullscreen-rewind-btn');
+          const forwardBtn = document.getElementById('fullscreen-forward-btn');
+          const stopBtn = document.getElementById('fullscreen-stop-btn');
+          
+          if (speakBtn) {
+            speakBtn.classList.remove('speaking');
+            speakBtn.innerHTML = '🔊 Speak';
+          }
+          if (rewindBtn) rewindBtn.style.display = 'none';
+          if (forwardBtn) forwardBtn.style.display = 'none';
+          if (stopBtn) stopBtn.style.display = 'none';
+          
+          clearInterval(highlightInterval);
+          clearHighlights(fullscreenContent);
+          currentSpeech = null;
+          currentSpeakingPage = null;
+        };
+        
+        window.speechSynthesis.speak(currentSpeech);
+      }
     }
     
     // Notes are now read-only, no need for handleFullscreenNoteChange function
